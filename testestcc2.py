@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numpy.linalg import norm
 from numpy.typing import ArrayLike
-# from sklearn.metrics import mean_squared_error as mse
 import pywt
 
 
@@ -182,6 +181,7 @@ def main():
 
     for key, value in results.items():
         print(key, value)
+
 
 if __name__ == '__main__':
     main()
