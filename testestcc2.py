@@ -6,6 +6,7 @@ import pywt
 
 
 GLOBAL_MAX_LEVEL = 6
+SIGNAL_FRAME_SIZE = 100
 
 SIGNAL_NAME = 'teste'
 INPUT_DATA_FILENAME = f'{SIGNAL_NAME}.pcm'
@@ -49,12 +50,12 @@ def get_noise_from_file() -> ArrayLike:
     return noise
 
 
-def mean_absolute_deviation(data: ArrayLike) -> float:
-    return np.mean(np.abs(data - np.mean(data)))
+def median_absolute_deviation(data: ArrayLike) -> float:
+    return np.median(np.abs(data - np.mean(data)))
 
 
 def calculate_threshold(d1: ArrayLike, size: int, k: float = 0.5) -> float:
-    return k*mean_absolute_deviation(d1)/0.6745*np.sqrt(2*np.log(size))
+    return k*median_absolute_deviation(d1)/0.6745*np.sqrt(2*np.log(size))
 
 
 def snr(signal: ArrayLike, noise: ArrayLike) -> float:
@@ -87,6 +88,14 @@ def normalize(data: ArrayLike) -> ArrayLike:
     return data/norm(data)
 
 
+def frame_based_denoising_kernel():
+    ...
+
+
+def full_signal_denoising_kernel():
+    ...
+
+
 def evaluate_noise_reduction_algorithm(
     input_data: ArrayLike, 
     noise: ArrayLike,
@@ -95,6 +104,7 @@ def evaluate_noise_reduction_algorithm(
     threshold_type: str
 ) -> tuple[tuple[str, int, str], list[float]]:
     local_max_level = min(max_level, pywt.dwt_max_level(input_data.size, mother_wavelet))
+    # local_max_level = min(max_level, pywt.dwt_max_level(SIGNAL_FRAME_SIZE, mother_wavelet))
 
     if local_max_level < max_level: # if local max level is reduced, then further calculations will be duplicated redundant
         return (None, None)
@@ -108,10 +118,38 @@ def evaluate_noise_reduction_algorithm(
     input_mse = mse(normalize(input_data), normalize(noisy_data))
     input_snr = snr(input_data, noise)
 
+    # output_data = np.zeros(noisy_data.size, dtype=noisy_data.dtype)
+
+    # for frame_start in np.arange(0, noisy_data.size, SIGNAL_FRAME_SIZE): # frame based approach (algorithm applied independently to 400 sample frames)
+    #     frame_end = frame_start + SIGNAL_FRAME_SIZE
+    #     if frame_start + SIGNAL_FRAME_SIZE > noisy_data.size:
+    #         frame_end = noisy_data.size 
+
+    #     frame = noisy_data[frame_start:frame_end]
+    #     actual_frame_size = frame_end - frame_start
+
+    #     transform = pywt.wavedec(frame, mother_wavelet, level=local_max_level)
+
+    #     coefficients_d1 = transform[-1] # coefficients D1 from first level wavelet decomposition
+    #     threshold = calculate_threshold(coefficients_d1, frame.size, 0.8) # threshold calculated for coefficients D1
+
+    #     wavelet_coefficients = transform[1:]
+
+    #     for index, coefficients in enumerate(wavelet_coefficients):
+    #         wavelet_coefficients[index] = pywt.threshold(coefficients, value=threshold, mode=threshold_type)
+        
+    #     transform[1:] = wavelet_coefficients
+
+    #     reconstructed_frame = np.array(pywt.waverec(transform, mother_wavelet), dtype=np.int16)
+    #     # reconstructed frame is sliced as it might have one more sample than the original as a side effect of the IDWT
+    #     # this may happen because usually, the IDWT algorithm can only be applied to signals with an even number of samples
+    #     # therefore, when working with an odd sample sized signal, a padding sample is added as to not affect the algorithm
+    #     output_data[frame_start:frame_end] = reconstructed_frame[:actual_frame_size]
+
     transform = pywt.wavedec(noisy_data, mother_wavelet, level=local_max_level)
 
     coefficients_d1 = transform[-1] # coefficients D1 from first level wavelet decomposition
-    threshold = calculate_threshold(coefficients_d1, input_data.size, 0.6) # threshold calculated for coefficients D1
+    threshold = calculate_threshold(coefficients_d1, input_data.size, 0.8) # threshold calculated for coefficients D1
 
     wavelet_coefficients = transform[1:]
 
@@ -140,7 +178,7 @@ def evaluate_noise_reduction_algorithm(
         'output_mse': output_mse
     }
 
-    if local_max_level == 2:
+    if local_max_level == 1:
         filename = NOISY_DATA_FILENAME
         with open(filename, 'wb') as output_file:
             output_file.write(noisy_data)
@@ -153,16 +191,16 @@ def evaluate_noise_reduction_algorithm(
 
 
 def main():
-    # mother_wavelets = init_mother_wavelets()
-    mother_wavelets = ['db8']
+    mother_wavelets = init_mother_wavelets()
+    # mother_wavelets = ['db8']
     print(f'{mother_wavelets=}')
 
-    # global_max_level = GLOBAL_MAX_LEVEL
-    global_max_level = 5
+    global_max_level = GLOBAL_MAX_LEVEL
+    # global_max_level = 5
     print(f'{global_max_level=}')
 
-    # threshold_types = init_threshold_types()
-    threshold_types = ['soft']
+    threshold_types = init_threshold_types()
+    # threshold_types = ['soft']
     print(f'{threshold_types=}')
 
     data = get_input_data_from_file()
