@@ -12,16 +12,22 @@ SIGNAL_FRAME_SIZE = int(0.02*SIGNAL_SAMPLE_RATE) # 20 ms
 SIGNAL_FRAME_OVERLAP = int(SIGNAL_FRAME_SIZE*0.5) # 50% overlap
 # SIGNAL_FRAME_OVERLAP = 0
 
-SIGNAL_NAME = 'music-fma-0118'
-SIGNAL_FOLDER = 'musan/music/fma'
-NOISE_NAME = 'noise-free-sound-0335'
+SIGNAL_NAME = 'speech-librivox-0169'
+SIGNAL_FOLDER = 'musan\speech\librivox'
+NOISE_NAME = 'noise-free-sound-0333'
 NOISE_FOLDER = 'musan/noise/free-sound'
+OUTPUT_FOLDER = f'outputs/{SIGNAL_NAME}'
+
 FILE_EXTENSION = 'wav'
+
 INPUT_DATA_FILENAME = f'{SIGNAL_FOLDER}/{SIGNAL_NAME}.{FILE_EXTENSION}'
-OUTPUT_DATA_FILENAME = f'denoised_{SIGNAL_NAME}.{FILE_EXTENSION}'
-NOISY_DATA_FILENAME = f'noisy_{SIGNAL_NAME}.{FILE_EXTENSION}'
 NOISE_FILENAME = f'{NOISE_FOLDER}/{NOISE_NAME}.{FILE_EXTENSION}'
-REMAINING_NOISE_FILENAME = f'remaining_noise.{FILE_EXTENSION}'
+
+INPUT_DATA_COPY_FILENAME = f'{OUTPUT_FOLDER}/{SIGNAL_NAME}.{FILE_EXTENSION}'
+OUTPUT_DATA_FILENAME = f'{OUTPUT_FOLDER}/denoised_{SIGNAL_NAME}.{FILE_EXTENSION}'
+NOISY_DATA_FILENAME = f'{OUTPUT_FOLDER}/noisy_{SIGNAL_NAME}.{FILE_EXTENSION}'
+NOISE_COPY_FILENAME = f'{OUTPUT_FOLDER}/noise.{FILE_EXTENSION}'
+REMAINING_NOISE_FILENAME = f'{OUTPUT_FOLDER}/remaining_noise.{FILE_EXTENSION}'
 
 
 sample_rate = 0
@@ -76,8 +82,26 @@ def get_noise_from_file() -> ArrayLike:
     return noise
 
 
-def save_outputs_to_file(noisy_data: ArrayLike, output_data: ArrayLike, remaining_noise: ArrayLike) -> None:
+def save_outputs_to_file(input_data: ArrayLike, noise: ArrayLike, noisy_data: ArrayLike, output_data: ArrayLike, remaining_noise: ArrayLike) -> None:
+    from pathlib import Path
+    import os
+
+    global sample_rate
+
     if FILE_EXTENSION == 'pcm':
+        absolute_path = os.path.dirname(__file__)
+        full_path = os.path.join(absolute_path, f'{OUTPUT_FOLDER}')
+
+        Path(full_path).mkdir(parents=True, exist_ok=True)
+
+        filename = INPUT_DATA_COPY_FILENAME
+        with open(filename, 'wb') as output_file:
+            output_file.write(input_data)
+
+        filename = NOISE_COPY_FILENAME
+        with open(filename, 'wb') as output_file:
+            output_file.write(noise)
+
         filename = NOISY_DATA_FILENAME
         with open(filename, 'wb') as output_file:
             output_file.write(noisy_data)
@@ -90,6 +114,17 @@ def save_outputs_to_file(noisy_data: ArrayLike, output_data: ArrayLike, remainin
         with open(filename, 'wb') as output_file:
             output_file.write(remaining_noise)
     elif FILE_EXTENSION == 'wav':
+        absolute_path = os.path.dirname(__file__)
+        full_path = os.path.join(absolute_path, f'{OUTPUT_FOLDER}')
+        
+        Path(full_path).mkdir(parents=True, exist_ok=True)
+
+        filename = INPUT_DATA_COPY_FILENAME
+        wavfile.write(filename, sample_rate, input_data)
+
+        filename = NOISE_COPY_FILENAME
+        wavfile.write(filename, sample_rate, noise)
+
         filename = NOISY_DATA_FILENAME
         wavfile.write(filename, sample_rate, noisy_data)
 
@@ -228,28 +263,28 @@ def evaluate_noise_reduction_algorithm(
     }
 
     if local_max_level == 2:
-        save_outputs_to_file(noisy_data, output_data, remaining_noise)
+        save_outputs_to_file(input_data, noise, noisy_data, output_data, remaining_noise)
 
     return (key, values)
 
 
 def main():
-    # mother_wavelets = init_mother_wavelets()
     mother_wavelets = ['db8']
+    mother_wavelets = init_mother_wavelets()
     print(f'{mother_wavelets=}')
 
-    # global_max_level = GLOBAL_MAX_LEVEL
     global_max_level = 5
+    global_max_level = GLOBAL_MAX_LEVEL
     print(f'{global_max_level=}')
 
-    # threshold_types = init_threshold_types()
     threshold_types = ['soft']
+    threshold_types = init_threshold_types()
     print(f'{threshold_types=}')
 
     data = get_input_data_from_file()
     noise = get_noise_from_file()
     data = data[:noise.size]
-    noise = noise[:data.size]//2
+    noise = noise[:data.size]//4
 
     results = dict()
 

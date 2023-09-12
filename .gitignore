@@ -1,4 +1,5 @@
 /*.pcm
 /*.wav
 /__pycache__
-/musan/*
+/musan
+/outputs
