@@ -3,6 +3,7 @@ import numpy as np
 from numpy.linalg import norm
 from numpy.typing import ArrayLike
 import pywt
+from scipy.io import wavfile
 
 
 GLOBAL_MAX_LEVEL = 6
@@ -11,12 +12,19 @@ SIGNAL_FRAME_SIZE = int(0.02*SIGNAL_SAMPLE_RATE) # 20 ms
 SIGNAL_FRAME_OVERLAP = int(SIGNAL_FRAME_SIZE*0.5) # 50% overlap
 # SIGNAL_FRAME_OVERLAP = 0
 
-SIGNAL_NAME = 'speech'
-INPUT_DATA_FILENAME = f'{SIGNAL_NAME}.pcm'
-OUTPUT_DATA_FILENAME = f'denoised_{SIGNAL_NAME}.pcm'
-NOISY_DATA_FILENAME = f'noisy_{SIGNAL_NAME}.pcm'
-# NOISE_FILENAME = 'white_noise.pcm'
-NOISE_FILENAME = f'{SIGNAL_NAME}_noise.pcm'
+SIGNAL_NAME = 'music-fma-0118'
+SIGNAL_FOLDER = 'musan/music/fma'
+NOISE_NAME = 'noise-free-sound-0335'
+NOISE_FOLDER = 'musan/noise/free-sound'
+FILE_EXTENSION = 'wav'
+INPUT_DATA_FILENAME = f'{SIGNAL_FOLDER}/{SIGNAL_NAME}.{FILE_EXTENSION}'
+OUTPUT_DATA_FILENAME = f'denoised_{SIGNAL_NAME}.{FILE_EXTENSION}'
+NOISY_DATA_FILENAME = f'noisy_{SIGNAL_NAME}.{FILE_EXTENSION}'
+NOISE_FILENAME = f'{NOISE_FOLDER}/{NOISE_NAME}.{FILE_EXTENSION}'
+REMAINING_NOISE_FILENAME = f'remaining_noise.{FILE_EXTENSION}'
+
+
+sample_rate = 0
 
 
 def init_mother_wavelets() -> list[str]:
@@ -39,19 +47,59 @@ def init_threshold_types() -> list[str]:
 
 
 def get_input_data_from_file() -> ArrayLike:
+    global sample_rate
+
     filename = INPUT_DATA_FILENAME
-    with open(filename, 'rb') as input_file:
-        signal = np.fromfile(input_file, dtype=np.int16)
+
+    if FILE_EXTENSION == 'pcm':
+        with open(filename, 'rb') as input_file:
+            signal = np.fromfile(input_file, dtype=np.int16)
+    elif FILE_EXTENSION == 'wav':
+        sample_rate, signal = wavfile.read(filename)
+    else:
+        raise ValueError('Unknown/Unsupported file extension.')
 
     return signal
 
 
 def get_noise_from_file() -> ArrayLike:
     filename = NOISE_FILENAME
-    with open(filename, 'rb') as input_file:
-        noise = np.fromfile(input_file, dtype=np.int16)
+
+    if FILE_EXTENSION == 'pcm':
+        with open(filename, 'rb') as input_file:
+            noise = np.fromfile(input_file, dtype=np.int16)
+    elif FILE_EXTENSION == 'wav':
+        _, noise = wavfile.read(filename)
+    else:
+        raise ValueError('Unknown/Unsupported file extension.')
 
     return noise
+
+
+def save_outputs_to_file(noisy_data: ArrayLike, output_data: ArrayLike, remaining_noise: ArrayLike) -> None:
+    if FILE_EXTENSION == 'pcm':
+        filename = NOISY_DATA_FILENAME
+        with open(filename, 'wb') as output_file:
+            output_file.write(noisy_data)
+
+        filename = OUTPUT_DATA_FILENAME
+        with open(filename, 'wb') as output_file:
+            output_file.write(output_data)
+
+        filename = REMAINING_NOISE_FILENAME
+        with open(filename, 'wb') as output_file:
+            output_file.write(remaining_noise)
+    elif FILE_EXTENSION == 'wav':
+        filename = NOISY_DATA_FILENAME
+        wavfile.write(filename, sample_rate, noisy_data)
+
+        filename = OUTPUT_DATA_FILENAME
+        wavfile.write(filename, sample_rate, output_data)
+
+        filename = REMAINING_NOISE_FILENAME
+        wavfile.write(filename, sample_rate, remaining_noise)
+    else:
+        raise ValueError('Unknown/Unsupported file extension.')
 
 
 def median_absolute_deviation(data: ArrayLike) -> float:
@@ -85,7 +133,7 @@ def mse(original_signal: ArrayLike, resulting_signal: ArrayLike) -> float:
     float
         The mean squared error value between the original signal and its resulting signal
     """
-    return np.mean(np.square(original_signal.astype(np.float64) - resulting_signal.astype(np.float64)))
+    return np.mean(np.square(original_signal - resulting_signal))
 
 
 def normalize(data: ArrayLike) -> ArrayLike:
@@ -146,7 +194,6 @@ def evaluate_noise_reduction_algorithm(
     
     noisy_data = input_data + noise
 
-    # input_mse = mse(normalize(input_data), normalize(noisy_data))
     input_mse = mse(input_data, noisy_data)
     input_snr = snr(input_data, noise)
 
@@ -169,7 +216,6 @@ def evaluate_noise_reduction_algorithm(
 
     remaining_noise = output_data - input_data
 
-    # output_mse = mse(normalize(input_data), normalize(output_data))
     output_mse = mse(input_data, output_data)
     output_snr = snr(input_data, remaining_noise)
 
@@ -182,17 +228,7 @@ def evaluate_noise_reduction_algorithm(
     }
 
     if local_max_level == 2:
-        filename = NOISY_DATA_FILENAME
-        with open(filename, 'wb') as output_file:
-            output_file.write(noisy_data)
-
-        filename = OUTPUT_DATA_FILENAME
-        with open(filename, 'wb') as output_file:
-            output_file.write(output_data)
-
-        filename = 'remaining_noise.pcm'
-        with open(filename, 'wb') as output_file:
-            output_file.write(remaining_noise)
+        save_outputs_to_file(noisy_data, output_data, remaining_noise)
 
     return (key, values)
 
@@ -212,7 +248,8 @@ def main():
 
     data = get_input_data_from_file()
     noise = get_noise_from_file()
-    noise = noise[:data.size]
+    data = data[:noise.size]
+    noise = noise[:data.size]//2
 
     results = dict()
 

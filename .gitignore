@@ -1,2 +1,4 @@
 /*.pcm
+/*.wav
 /__pycache__
+/musan/*
