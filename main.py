@@ -3,20 +3,36 @@ import numpy as np
 from numpy.linalg import norm
 from numpy.typing import ArrayLike
 import pywt
+from scipy.io import wavfile
+import samplerate
 
 
-GLOBAL_MAX_LEVEL = 6
+GLOBAL_MAX_LEVEL = 8
 SIGNAL_SAMPLE_RATE = 8000
 SIGNAL_FRAME_SIZE = int(0.02*SIGNAL_SAMPLE_RATE) # 20 ms
 SIGNAL_FRAME_OVERLAP = int(SIGNAL_FRAME_SIZE*0.5) # 50% overlap
 # SIGNAL_FRAME_OVERLAP = 0
 
-SIGNAL_NAME = 'speech'
-INPUT_DATA_FILENAME = f'{SIGNAL_NAME}.pcm'
-OUTPUT_DATA_FILENAME = f'denoised_{SIGNAL_NAME}.pcm'
-NOISY_DATA_FILENAME = f'noisy_{SIGNAL_NAME}.pcm'
-# NOISE_FILENAME = 'white_noise.pcm'
-NOISE_FILENAME = f'{SIGNAL_NAME}_noise.pcm'
+SIGNAL_NAME = 'speech-librivox-0062'
+SIGNAL_FOLDER = 'musan/speech/librivox'
+NOISE_NAME = 'noise-free-sound-0287'
+NOISE_FOLDER = 'musan/noise/free-sound'
+OUTPUT_FOLDER = f'outputs/{SIGNAL_NAME}'
+
+FILE_EXTENSION = 'wav'
+
+INPUT_DATA_FILENAME = f'{SIGNAL_FOLDER}/{SIGNAL_NAME}.{FILE_EXTENSION}'
+NOISE_FILENAME = f'{NOISE_FOLDER}/{NOISE_NAME}.{FILE_EXTENSION}'
+
+INPUT_DATA_COPY_FILENAME = f'{OUTPUT_FOLDER}/{SIGNAL_NAME}.{FILE_EXTENSION}'
+OUTPUT_DATA_FILENAME = f'{OUTPUT_FOLDER}/denoised_{SIGNAL_NAME}.{FILE_EXTENSION}'
+NOISY_DATA_FILENAME = f'{OUTPUT_FOLDER}/noisy_{SIGNAL_NAME}.{FILE_EXTENSION}'
+NOISE_COPY_FILENAME = f'{OUTPUT_FOLDER}/noise_{NOISE_NAME}.{FILE_EXTENSION}'
+REMAINING_NOISE_FILENAME = f'{OUTPUT_FOLDER}/remaining_noise.{FILE_EXTENSION}'
+
+
+signal_sample_rate = 0
+noise_sample_rate = 0
 
 
 def init_mother_wavelets() -> list[str]:
@@ -39,19 +55,104 @@ def init_threshold_types() -> list[str]:
 
 
 def get_input_data_from_file() -> ArrayLike:
+    global signal_sample_rate
+
     filename = INPUT_DATA_FILENAME
-    with open(filename, 'rb') as input_file:
-        signal = np.fromfile(input_file, dtype=np.int16)
+
+    if FILE_EXTENSION == 'pcm':
+        with open(filename, 'rb') as input_file:
+            signal = np.fromfile(input_file, dtype=np.int16)
+    elif FILE_EXTENSION == 'wav':
+        signal_sample_rate, signal = wavfile.read(filename)
+    else:
+        raise ValueError('Unknown/Unsupported file extension.')
 
     return signal
 
 
 def get_noise_from_file() -> ArrayLike:
+    global noise_sample_rate
+
     filename = NOISE_FILENAME
-    with open(filename, 'rb') as input_file:
-        noise = np.fromfile(input_file, dtype=np.int16)
+
+    if FILE_EXTENSION == 'pcm':
+        with open(filename, 'rb') as input_file:
+            noise = np.fromfile(input_file, dtype=np.int16)
+    elif FILE_EXTENSION == 'wav':
+        noise_sample_rate, noise = wavfile.read(filename)
+    else:
+        raise ValueError('Unknown/Unsupported file extension.')
 
     return noise
+
+
+def save_outputs_to_file(input_data: ArrayLike, noise: ArrayLike, noisy_data: ArrayLike, output_data: ArrayLike, remaining_noise: ArrayLike) -> None:
+    from pathlib import Path
+    import os
+    
+    if len(input_data.shape) > 1:
+        input_data = np.transpose(input_data)
+        noise = np.transpose(noise)[0]
+        noisy_data = np.transpose(noisy_data)
+        output_data = np.transpose(output_data)
+        remaining_noise = np.transpose(remaining_noise)
+
+    absolute_path = os.path.dirname(__file__)
+    full_path = os.path.join(absolute_path, f'{OUTPUT_FOLDER}')
+
+    Path(full_path).mkdir(parents=True, exist_ok=True)
+
+    noise = resample_noise(noise, signal_sample_rate, noise_sample_rate)
+
+    if FILE_EXTENSION == 'pcm':
+        filename = INPUT_DATA_COPY_FILENAME
+        with open(filename, 'wb') as output_file:
+            output_file.write(input_data)
+
+        filename = NOISE_COPY_FILENAME
+        with open(filename, 'wb') as output_file:
+            output_file.write(noise)
+
+        filename = NOISY_DATA_FILENAME
+        with open(filename, 'wb') as output_file:
+            output_file.write(noisy_data)
+
+        filename = OUTPUT_DATA_FILENAME
+        with open(filename, 'wb') as output_file:
+            output_file.write(output_data)
+
+        filename = REMAINING_NOISE_FILENAME
+        with open(filename, 'wb') as output_file:
+            output_file.write(remaining_noise)
+    elif FILE_EXTENSION == 'wav':
+        filename = INPUT_DATA_COPY_FILENAME
+        wavfile.write(filename, signal_sample_rate, input_data)
+
+        filename = NOISE_COPY_FILENAME
+        wavfile.write(filename, noise_sample_rate, noise)
+
+        filename = NOISY_DATA_FILENAME
+        wavfile.write(filename, signal_sample_rate, noisy_data)
+
+        filename = OUTPUT_DATA_FILENAME
+        wavfile.write(filename, signal_sample_rate, output_data)
+
+        filename = REMAINING_NOISE_FILENAME
+        wavfile.write(filename, signal_sample_rate, remaining_noise)
+    else:
+        raise ValueError('Unknown/Unsupported file extension.')
+
+
+def normalize(data: ArrayLike) -> ArrayLike:
+    return data/np.power(2, 15)
+
+
+def unnormalize(data: ArrayLike) -> ArrayLike:
+    return (data*np.power(2, 15)).astype(np.int16)
+
+
+def resample_noise(noise, original_rate, target_rate):
+    return unnormalize(samplerate.resample(normalize(noise), target_rate/original_rate))
 
 
 def median_absolute_deviation(data: ArrayLike) -> float:
@@ -85,11 +186,7 @@ def mse(original_signal: ArrayLike, resulting_signal: ArrayLike) -> float:
     float
         The mean squared error value between the original signal and its resulting signal
     """
-    return np.mean(np.square(original_signal.astype(np.float64) - resulting_signal.astype(np.float64)))
-
-
-def normalize(data: ArrayLike) -> ArrayLike:
-    return data/norm(data)
+    return np.mean(np.square(original_signal - resulting_signal))
 
 
 def frame_based_denoising_kernel(
@@ -111,7 +208,7 @@ def frame_based_denoising_kernel(
         transform = pywt.wavedec(frame, mother_wavelet, level=local_max_level)
 
         coefficients_d1 = transform[-1] # coefficients D1 from first level wavelet decomposition
-        threshold = calculate_threshold(coefficients_d1, frame.size, 0.6) # threshold calculated for coefficients D1
+        threshold = calculate_threshold(coefficients_d1, frame.size, 0.8) # threshold calculated for coefficients D1
 
         wavelet_coefficients = transform[1:]
 
@@ -146,8 +243,7 @@ def evaluate_noise_reduction_algorithm(
     
     noisy_data = input_data + noise
 
-    # input_mse = mse(normalize(input_data), normalize(noisy_data))
-    input_mse = mse(input_data, noisy_data)
+    input_mse = mse(normalize(input_data), normalize(noisy_data))
     input_snr = snr(input_data, noise)
 
     # output_data = frame_based_denoising_kernel(noisy_data, mother_wavelet, local_max_level, threshold_type)
@@ -155,7 +251,7 @@ def evaluate_noise_reduction_algorithm(
     transform = pywt.wavedec(noisy_data, mother_wavelet, level=local_max_level)
 
     coefficients_d1 = transform[-1] # coefficients D1 from first level wavelet decomposition
-    threshold = calculate_threshold(coefficients_d1, input_data.size, 0.6) # threshold calculated for coefficients D1
+    threshold = calculate_threshold(coefficients_d1, input_data.size, 0.7) # threshold calculated for coefficients D1
 
     wavelet_coefficients = transform[1:]
 
@@ -169,8 +265,7 @@ def evaluate_noise_reduction_algorithm(
 
     remaining_noise = output_data - input_data
 
-    # output_mse = mse(normalize(input_data), normalize(output_data))
-    output_mse = mse(input_data, output_data)
+    output_mse = mse(normalize(input_data), normalize(output_data))
     output_snr = snr(input_data, remaining_noise)
 
     key = (mother_wavelet, local_max_level, threshold_type)
@@ -181,39 +276,39 @@ def evaluate_noise_reduction_algorithm(
         'output_mse': output_mse
     }
 
-    if local_max_level == 2:
-        filename = NOISY_DATA_FILENAME
-        with open(filename, 'wb') as output_file:
-            output_file.write(noisy_data)
-
-        filename = OUTPUT_DATA_FILENAME
-        with open(filename, 'wb') as output_file:
-            output_file.write(output_data)
-
-        filename = 'remaining_noise.pcm'
-        with open(filename, 'wb') as output_file:
-            output_file.write(remaining_noise)
+    if local_max_level == 3:
+        save_outputs_to_file(input_data, noise, noisy_data, output_data, remaining_noise)
 
     return (key, values)
 
 
 def main():
+    mother_wavelets = ['coif12']
     # mother_wavelets = init_mother_wavelets()
-    mother_wavelets = ['db8']
     print(f'{mother_wavelets=}')
 
-    # global_max_level = GLOBAL_MAX_LEVEL
     global_max_level = 5
+    global_max_level = GLOBAL_MAX_LEVEL
     print(f'{global_max_level=}')
 
+    threshold_types = ['hard']
     # threshold_types = init_threshold_types()
-    threshold_types = ['soft']
     print(f'{threshold_types=}')
 
     data = get_input_data_from_file()
     noise = get_noise_from_file()
+
+    noise = resample_noise(noise, noise_sample_rate, signal_sample_rate)
+
+    data = data[:noise.size]
+
+    if len(data.shape) > 1:
+        data = np.transpose(data)
+        noise = np.array([noise, noise])
+        
     noise = noise[:data.size]
 
+    noise = noise//2
 
     results = dict()
 
