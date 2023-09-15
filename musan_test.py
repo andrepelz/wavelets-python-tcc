@@ -13,9 +13,9 @@ SIGNAL_FRAME_SIZE = int(0.02*SIGNAL_SAMPLE_RATE) # 20 ms
 SIGNAL_FRAME_OVERLAP = int(SIGNAL_FRAME_SIZE*0.5) # 50% overlap
 # SIGNAL_FRAME_OVERLAP = 0
 
-SIGNAL_NAME = 'scarlet-devil-mansion-3'
-SIGNAL_FOLDER = 'my-files'
-NOISE_NAME = 'noise-free-sound-0030'
+SIGNAL_NAME = 'speech-librivox-0062'
+SIGNAL_FOLDER = 'musan/speech/librivox'
+NOISE_NAME = 'noise-free-sound-0287'
 NOISE_FOLDER = 'musan/noise/free-sound'
 OUTPUT_FOLDER = f'outputs/{SIGNAL_NAME}'
 
@@ -251,7 +251,7 @@ def evaluate_noise_reduction_algorithm(
     transform = pywt.wavedec(noisy_data, mother_wavelet, level=local_max_level)
 
     coefficients_d1 = transform[-1] # coefficients D1 from first level wavelet decomposition
-    threshold = calculate_threshold(coefficients_d1, input_data.size, 0.3) # threshold calculated for coefficients D1
+    threshold = calculate_threshold(coefficients_d1, input_data.size, 0.7) # threshold calculated for coefficients D1
 
     wavelet_coefficients = transform[1:]
 
@@ -276,22 +276,22 @@ def evaluate_noise_reduction_algorithm(
         'output_mse': output_mse
     }
 
-    if local_max_level == 5:
+    if local_max_level == 3:
         save_outputs_to_file(input_data, noise, noisy_data, output_data, remaining_noise)
 
     return (key, values)
 
 
 def main():
-    mother_wavelets = ['sym8']
+    mother_wavelets = ['coif12']
     # mother_wavelets = init_mother_wavelets()
     print(f'{mother_wavelets=}')
 
     global_max_level = 5
-    # global_max_level = GLOBAL_MAX_LEVEL
+    global_max_level = GLOBAL_MAX_LEVEL
     print(f'{global_max_level=}')
 
-    threshold_types = ['soft']
+    threshold_types = ['hard']
     # threshold_types = init_threshold_types()
     print(f'{threshold_types=}')
 
@@ -308,8 +308,7 @@ def main():
         
     noise = noise[:data.size]
 
-    data = data//2
-    noise = noise//4
+    noise = noise//2
 
     results = dict()
 
