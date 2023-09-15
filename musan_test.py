@@ -7,16 +7,16 @@ from scipy.io import wavfile
 import samplerate
 
 
-GLOBAL_MAX_LEVEL = 6
+GLOBAL_MAX_LEVEL = 8
 SIGNAL_SAMPLE_RATE = 8000
 SIGNAL_FRAME_SIZE = int(0.02*SIGNAL_SAMPLE_RATE) # 20 ms
 SIGNAL_FRAME_OVERLAP = int(SIGNAL_FRAME_SIZE*0.5) # 50% overlap
 # SIGNAL_FRAME_OVERLAP = 0
 
-SIGNAL_NAME = 'Track25'
+SIGNAL_NAME = 'scarlet-devil-mansion-3'
 SIGNAL_FOLDER = 'my-files'
-NOISE_NAME = 'noise-sound-bible-0049'
-NOISE_FOLDER = 'musan/noise/sound-bible'
+NOISE_NAME = 'noise-free-sound-0030'
+NOISE_FOLDER = 'musan/noise/free-sound'
 OUTPUT_FOLDER = f'outputs/{SIGNAL_NAME}'
 
 FILE_EXTENSION = 'wav'
@@ -89,6 +89,13 @@ def get_noise_from_file() -> ArrayLike:
 def save_outputs_to_file(input_data: ArrayLike, noise: ArrayLike, noisy_data: ArrayLike, output_data: ArrayLike, remaining_noise: ArrayLike) -> None:
     from pathlib import Path
     import os
+    
+    if len(input_data.shape) > 1:
+        input_data = np.transpose(input_data)
+        noise = np.transpose(noise)[0]
+        noisy_data = np.transpose(noisy_data)
+        output_data = np.transpose(output_data)
+        remaining_noise = np.transpose(remaining_noise)
 
     absolute_path = os.path.dirname(__file__)
     full_path = os.path.join(absolute_path, f'{OUTPUT_FOLDER}')
@@ -276,7 +283,7 @@ def evaluate_noise_reduction_algorithm(
 
 
 def main():
-    mother_wavelets = ['db4']
+    mother_wavelets = ['sym8']
     # mother_wavelets = init_mother_wavelets()
     print(f'{mother_wavelets=}')
 
@@ -284,7 +291,7 @@ def main():
     # global_max_level = GLOBAL_MAX_LEVEL
     print(f'{global_max_level=}')
 
-    threshold_types = ['hard']
+    threshold_types = ['soft']
     # threshold_types = init_threshold_types()
     print(f'{threshold_types=}')
 
@@ -294,9 +301,15 @@ def main():
     noise = resample_noise(noise, noise_sample_rate, signal_sample_rate)
 
     data = data[:noise.size]
+
+    if len(data.shape) > 1:
+        data = np.transpose(data)
+        noise = np.array([noise, noise])
+        
     noise = noise[:data.size]
 
-    noise = noise//2
+    data = data//2
+    noise = noise//4
 
     results = dict()
 
