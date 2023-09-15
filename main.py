@@ -214,6 +214,7 @@ def main():
     noise = get_noise_from_file()
     noise = noise[:data.size]
 
+
     results = dict()
 
     for wavelet in mother_wavelets:
