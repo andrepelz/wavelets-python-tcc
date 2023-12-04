@@ -1,182 +1,328 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy.linalg import norm
 from numpy.typing import ArrayLike
+import pywt
+from scipy.io import wavfile
+import samplerate
 
-from spectrum import Spectrum
-from wavelets import DaubechiesD4 as db4, Haar
 
-def impulso_unitario(n, dtype=np.float64):
-    y = np.zeros(n.shape, dtype)
+GLOBAL_MAX_LEVEL = 8
+SIGNAL_SAMPLE_RATE = 8000
+SIGNAL_FRAME_SIZE = int(0.02*SIGNAL_SAMPLE_RATE) # 20 ms
+SIGNAL_FRAME_OVERLAP = int(SIGNAL_FRAME_SIZE*0.5) # 50% overlap
+# SIGNAL_FRAME_OVERLAP = 0
+
+SIGNAL_NAME = 'speech-librivox-0062'
+SIGNAL_FOLDER = 'musan/speech/librivox'
+NOISE_NAME = 'noise-free-sound-0287'
+NOISE_FOLDER = 'musan/noise/free-sound'
+OUTPUT_FOLDER = f'outputs/{SIGNAL_NAME}'
+
+FILE_EXTENSION = 'wav'
+
+INPUT_DATA_FILENAME = f'{SIGNAL_FOLDER}/{SIGNAL_NAME}.{FILE_EXTENSION}'
+NOISE_FILENAME = f'{NOISE_FOLDER}/{NOISE_NAME}.{FILE_EXTENSION}'
+
+INPUT_DATA_COPY_FILENAME = f'{OUTPUT_FOLDER}/{SIGNAL_NAME}.{FILE_EXTENSION}'
+OUTPUT_DATA_FILENAME = f'{OUTPUT_FOLDER}/denoised_{SIGNAL_NAME}.{FILE_EXTENSION}'
+NOISY_DATA_FILENAME = f'{OUTPUT_FOLDER}/noisy_{SIGNAL_NAME}.{FILE_EXTENSION}'
+NOISE_COPY_FILENAME = f'{OUTPUT_FOLDER}/noise_{NOISE_NAME}.{FILE_EXTENSION}'
+REMAINING_NOISE_FILENAME = f'{OUTPUT_FOLDER}/remaining_noise.{FILE_EXTENSION}'
+
+
+signal_sample_rate = 0
+noise_sample_rate = 0
+
+
+def init_mother_wavelets() -> list[str]:
+    result = []
+
+    daubechies = [ 'db4', 'db8', 'db16', 'db24', 'db32' ]
+    result = np.append(result, daubechies)
+
+    symlets = [ 'sym2', 'sym4', 'sym8', 'sym16' ]
+    result = np.append(result, symlets)
+
+    coiflets = [ 'coif2', 'coif4', 'coif8' ]
+    result = np.append(result, coiflets)
+
+    return result
+
+
+def init_threshold_types() -> list[str]:
+    return [ 'hard', 'soft', 'garrote' ]
+
+
+def get_input_data_from_file() -> ArrayLike:
+    global signal_sample_rate
+
+    filename = INPUT_DATA_FILENAME
+
+    if FILE_EXTENSION == 'pcm':
+        with open(filename, 'rb') as input_file:
+            signal = np.fromfile(input_file, dtype=np.int16)
+    elif FILE_EXTENSION == 'wav':
+        signal_sample_rate, signal = wavfile.read(filename)
+    else:
+        raise ValueError('Unknown/Unsupported file extension.')
+
+    return signal
+
+
+def get_noise_from_file() -> ArrayLike:
+    global noise_sample_rate
+
+    filename = NOISE_FILENAME
+
+    if FILE_EXTENSION == 'pcm':
+        with open(filename, 'rb') as input_file:
+            noise = np.fromfile(input_file, dtype=np.int16)
+    elif FILE_EXTENSION == 'wav':
+        noise_sample_rate, noise = wavfile.read(filename)
+    else:
+        raise ValueError('Unknown/Unsupported file extension.')
+
+    return noise
+
+
+def save_outputs_to_file(input_data: ArrayLike, noise: ArrayLike, noisy_data: ArrayLike, output_data: ArrayLike, remaining_noise: ArrayLike) -> None:
+    from pathlib import Path
+    import os
     
-    zero, = np.where(n == 0)
-    
-    for index in zero:
-        y[index] = 1
+    if len(input_data.shape) > 1:
+        input_data = np.transpose(input_data)
+        noise = np.transpose(noise)[0]
+        noisy_data = np.transpose(noisy_data)
+        output_data = np.transpose(output_data)
+        remaining_noise = np.transpose(remaining_noise)
 
-    return y
+    absolute_path = os.path.dirname(__file__)
+    full_path = os.path.join(absolute_path, f'{OUTPUT_FOLDER}')
 
-def degrau_unitario(n, dtype=np.float64):
-    y = np.zeros(n.shape, dtype)
-    
-    zero, = np.where(n == 0)
-    
-    for index in zero:
-        y[index:] = 1
+    Path(full_path).mkdir(parents=True, exist_ok=True)
 
-    return y
+    noise = resample_noise(noise, signal_sample_rate, noise_sample_rate)
 
-def pkt_test():
-    data = np.array(
-        [32, 10, 20, 38, 37, 28, 38, 34, 18, 24, 18, 9, 23, 24, 28, 34],
-        dtype=np.float64
-    )
+    if FILE_EXTENSION == 'pcm':
+        filename = INPUT_DATA_COPY_FILENAME
+        with open(filename, 'wb') as output_file:
+            output_file.write(input_data)
 
-    transform = Haar.packet_transform(data)
+        filename = NOISE_COPY_FILENAME
+        with open(filename, 'wb') as output_file:
+            output_file.write(noise)
 
-    # result = transform.get_full_transform()
+        filename = NOISY_DATA_FILENAME
+        with open(filename, 'wb') as output_file:
+            output_file.write(noisy_data)
 
-    basis = transform.get_best_basis()
-    result = np.array([], dtype=np.float64)
+        filename = OUTPUT_DATA_FILENAME
+        with open(filename, 'wb') as output_file:
+            output_file.write(output_data)
 
-    for item in basis:
-        result = np.append(result, item.data)
+        filename = REMAINING_NOISE_FILENAME
+        with open(filename, 'wb') as output_file:
+            output_file.write(remaining_noise)
+    elif FILE_EXTENSION == 'wav':
+        filename = INPUT_DATA_COPY_FILENAME
+        wavfile.write(filename, signal_sample_rate, input_data)
 
-    # recovery = Haar.inverse_packet_transform(result)
+        filename = NOISE_COPY_FILENAME
+        wavfile.write(filename, noise_sample_rate, noise)
 
-    np.set_printoptions(precision=2)
-    print(data)
-    print(result)
-    # print(recovery)
+        filename = NOISY_DATA_FILENAME
+        wavfile.write(filename, signal_sample_rate, noisy_data)
 
-    return
+        filename = OUTPUT_DATA_FILENAME
+        wavfile.write(filename, signal_sample_rate, output_data)
 
-def spectrum_and_transform_test(*, cls=db4):
-    n = np.arange(0, np.pi, np.pi/1024)
+        filename = REMAINING_NOISE_FILENAME
+        wavfile.write(filename, signal_sample_rate, remaining_noise)
+    else:
+        raise ValueError('Unknown/Unsupported file extension.')
 
-    wave_1 = np.sin( 4*np.pi*n)
-    wave_2 = np.sin(16*np.pi*n)
 
-    data = wave_1 + wave_2
+def normalize(data: ArrayLike) -> ArrayLike:
+    return data/np.power(2, 15)
 
-    wavelet_transform = cls.transform(data)
-    power_spectrum = Spectrum.spectral_calc(wavelet_transform)
-    inverse_transform = cls.inverse_transform(wavelet_transform)
 
-    n_spectrum = np.arange(0, power_spectrum.size)
+def unnormalize(data: ArrayLike) -> ArrayLike:
+    return (data*np.power(2, 15)).astype(np.int16)
 
-    plt.plot(n, data)
-    plt.plot(n, inverse_transform)
-    plt.show()
 
-    plt.plot(n_spectrum, power_spectrum)
-    plt.stem(n_spectrum, power_spectrum, linefmt='red')
-    plt.show()
+def resample_noise(noise, original_rate, target_rate):
+    return unnormalize(samplerate.resample(normalize(noise), target_rate/original_rate))
 
-    component_1, component_2 = Spectrum.reconstruct_signal(wavelet_transform, cls=cls)
 
-    plt.plot(n, component_1)
-    plt.plot(n, component_2)
-    plt.show()
+def median_absolute_deviation(data: ArrayLike) -> float:
+    return np.median(np.abs(data - np.mean(data)))
 
-def noise_reduction_test(): # terrible, horrible, not good, very bad
-    """not that terrible, could be better"""
-    def calculate_threshold(data: ArrayLike, k: float = 0.5, decomposition_level: int = 1):
-        # std_deviation = np.std(data)
-        return k*np.std(data)*np.sqrt(2*np.log2(data.size))/np.log2((decomposition_level + 1))
 
-    def apply_threshold(data: ArrayLike, threshold: float, thresh_type='hard', beta: float = 0.1):
-        result = np.copy(data)
+def calculate_threshold(d1: ArrayLike, size: int, k: float = 0.5) -> float:
+    return k*median_absolute_deviation(d1)/0.6745*np.sqrt(2*np.log(size))
+
+
+def snr(signal: ArrayLike, noise: ArrayLike) -> float:
+    signal_power = np.mean(np.square(signal.astype(np.float64), dtype=np.float64))
+    noise_power = np.mean(np.square(noise.astype(np.float64), dtype=np.float64))
+
+    return 10*np.log10(signal_power/noise_power)
+
+
+def mse(original_signal: ArrayLike, resulting_signal: ArrayLike) -> float:
+    """
+    Returns the mean squared error (MSE) between a given signal and its resulting signal
+
+    Parameters 
+    ----------
+    original_signal : array_like
+        Array object of the original signal
+    resulting_signal : array_like 
+        Array object of the resulting signal (transformed, predicted, etc.)
+
+    Returns
+    -------
+    float
+        The mean squared error value between the original signal and its resulting signal
+    """
+    return np.mean(np.square(original_signal - resulting_signal))
+
+
+def frame_based_denoising_kernel(
+        noisy_data, 
+        mother_wavelet, 
+        local_max_level, 
+        threshold_type
+    ):
+    output_data = np.zeros(noisy_data.size, dtype=noisy_data.dtype)
+
+    for frame_start in np.arange(0, noisy_data.size, SIGNAL_FRAME_SIZE - SIGNAL_FRAME_OVERLAP): # frame based approach (algorithm applied independently to 400 sample frames)
+        frame_end = frame_start + SIGNAL_FRAME_SIZE
+        if frame_start + SIGNAL_FRAME_SIZE > noisy_data.size:
+            frame_end = noisy_data.size 
+
+        frame = noisy_data[frame_start:frame_end]
+        actual_frame_size = frame_end - frame_start
+
+        transform = pywt.wavedec(frame, mother_wavelet, level=local_max_level)
+
+        coefficients_d1 = transform[-1] # coefficients D1 from first level wavelet decomposition
+        threshold = calculate_threshold(coefficients_d1, frame.size, 0.8) # threshold calculated for coefficients D1
+
+        wavelet_coefficients = transform[1:]
+
+        for index, coefficients in enumerate(wavelet_coefficients):
+            wavelet_coefficients[index] = pywt.threshold(coefficients, value=threshold, mode=threshold_type)
         
-        for index, sample in enumerate(result):
-            if np.abs(sample) < threshold and thresh_type != 'improved': # sample under threshold check
-                result[index] = 0
-            elif thresh_type == 'soft': # sample over threshold, do nothing on hard thresh, subtract threshold value on soft thresh
-                result[index] = sample - threshold if sample > 0 else sample + threshold
-            elif thresh_type == 'improved':
-                if np.abs(sample) < threshold:
-                    result[index] = beta*sample
-                else:
-                    partial_value = np.sqrt(np.square(sample) - np.square(threshold))
-                    result[index] = partial_value if sample > 0 else -partial_value
+        transform[1:] = wavelet_coefficients
 
-        return result
+        reconstructed_frame = pywt.waverec(transform, mother_wavelet)
+        reconstructed_frame *= np.hamming(reconstructed_frame.size)
+
+        # reconstructed frame is sliced as it might have one more sample than the original as a side effect of the IDWT
+        # this may happen because usually, the IDWT algorithm can only be applied to signals with an even number of samples
+        # therefore, when working with an odd sample sized signal, a padding sample is added as to not affect the algorithm
+        output_data[frame_start:frame_end] += np.array(reconstructed_frame[:actual_frame_size], dtype=np.int16)
+
+    return output_data
 
 
-    filename = 'sine.pcm'
-    with open(filename, 'rb') as input_file:
-        signal = np.fromfile(input_file, dtype=np.int16)
-    filename = 'white_noise.pcm'
-    with open(filename, 'rb') as input_file:
-        noise = np.fromfile(input_file, dtype=np.int16)
+def evaluate_noise_reduction_algorithm(
+    input_data: ArrayLike, 
+    noise: ArrayLike,
+    mother_wavelet: str, 
+    max_level: int, 
+    threshold_type: str
+) -> tuple[tuple[str, int, str], list[float]]:
+    local_max_level = min(max_level, pywt.dwt_max_level(input_data.size, mother_wavelet))
+    # local_max_level = min(max_level, pywt.dwt_max_level(SIGNAL_FRAME_SIZE, mother_wavelet))
 
-
-    # sample_rate = 40000
-    # n = np.arange(0.2*sample_rate) # 0.2 second signal
-    # signal = np.int16( np.power(2, 14)*np.sin(2*n*np.pi*100/sample_rate) )
-    # noise = np.int16( np.power(2, 10)*np.sin(2*n*np.pi*3000/sample_rate) )
-
-
-    data = np.add(signal, noise, dtype=np.int16)
-    n = np.arange(data.size)
-
-    depth = 2
-
-    plt.plot(n, data)
-    plt.show()
-
-    transform = db4.transform(data, depth)
-
-    plt.plot(n, transform)
-    plt.show()
-
-    inverse_transform = transform
-    # inverse_transform = db4.inverse_transform(transform, depth).astype(np.int16)
-
-    # start = transform.size//np.power(2, depth)
-    # end = start*2
-    # inverse_transform[start:end] = apply_threshold(inverse_transform[start:end])
-
-    for i in range(depth):
-        start = transform.size//np.power(2, depth - i)
-        end = start*2
-        level = depth - i
-        frequency_band = inverse_transform[start:end]
-        inverse_transform[start:end] = apply_threshold(
-            data=frequency_band, 
-            threshold=calculate_threshold(frequency_band, k=0.8, decomposition_level=level), 
-            # threshold=np.power(2, 14), 
-            thresh_type='improved'
-        )
-        # plt.plot(n, inverse_transform)
-        # plt.show()
-        step = db4.inverse_transform(inverse_transform[:end], 1)
-        inverse_transform[:end] = step
-
-    # inverse_transform = db4.inverse_transform(inverse_transform, depth)
-
-    inverse_transform = inverse_transform.astype(data.dtype)
-
-    plt.plot(n, data, 'r')
-    plt.plot(n, inverse_transform, 'g')
-    plt.show()
-
-    filename = 'noisy_sine.pcm'
-    with open(filename, 'wb') as output_file:
-        output_file.write(data)
-
-    filename = 'poorly_denoised_signal.pcm'
-    with open(filename, 'wb') as output_file:
-        output_file.write(inverse_transform)
+    if local_max_level < max_level: # if local max level is reduced, then further calculations will be duplicated redundant
+        return (None, None)
     
-    return
+    noisy_data = input_data + noise
+
+    input_mse = mse(normalize(input_data), normalize(noisy_data))
+    input_snr = snr(input_data, noise)
+
+    # output_data = frame_based_denoising_kernel(noisy_data, mother_wavelet, local_max_level, threshold_type)
+
+    transform = pywt.wavedec(noisy_data, mother_wavelet, level=local_max_level)
+
+    coefficients_d1 = transform[-1] # coefficients D1 from first level wavelet decomposition
+    threshold = calculate_threshold(coefficients_d1, input_data.size, 0.7) # threshold calculated for coefficients D1
+
+    wavelet_coefficients = transform[1:]
+
+    for index, coefficients in enumerate(wavelet_coefficients):
+        wavelet_coefficients[index] = pywt.threshold(coefficients, value=threshold, mode=threshold_type)
+    
+    transform[1:] = wavelet_coefficients
+
+    output_data = pywt.waverec(transform, mother_wavelet)
+    output_data = output_data[:input_data.size].astype(np.int16)
+
+    remaining_noise = output_data - input_data
+
+    output_mse = mse(normalize(input_data), normalize(output_data))
+    output_snr = snr(input_data, remaining_noise)
+
+    key = (mother_wavelet, local_max_level, threshold_type)
+    values = { 
+        'input_snr': input_snr, 
+        'output_snr': output_snr, 
+        'input_mse': input_mse, 
+        'output_mse': output_mse
+    }
+
+    if local_max_level == 3:
+        save_outputs_to_file(input_data, noise, noisy_data, output_data, remaining_noise)
+
+    return (key, values)
+
 
 def main():
-    noise_reduction_test()
-    # pkt_test()
-    # spectrum_and_transform_test(cls=Haar)
+    mother_wavelets = ['coif12']
+    # mother_wavelets = init_mother_wavelets()
+    print(f'{mother_wavelets=}')
 
-    return
+    global_max_level = 5
+    global_max_level = GLOBAL_MAX_LEVEL
+    print(f'{global_max_level=}')
 
-    
+    threshold_types = ['hard']
+    # threshold_types = init_threshold_types()
+    print(f'{threshold_types=}')
+
+    data = get_input_data_from_file()
+    noise = get_noise_from_file()
+
+    noise = resample_noise(noise, noise_sample_rate, signal_sample_rate)
+
+    data = data[:noise.size]
+
+    if len(data.shape) > 1:
+        data = np.transpose(data)
+        noise = np.array([noise, noise])
+        
+    noise = noise[:data.size]
+
+    noise = noise//2
+
+    results = dict()
+
+    for wavelet in mother_wavelets:
+        for level in range(global_max_level):
+            for thresh_type in threshold_types:
+                key, values = evaluate_noise_reduction_algorithm(data, noise, wavelet, level + 1, thresh_type)
+
+                if key != None:
+                    results[key] = values
+
+    for key, value in results.items():
+        print(key, value)
+
+
 if __name__ == '__main__':
     main()
