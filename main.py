@@ -155,12 +155,8 @@ def resample_noise(noise, original_rate, target_rate):
     return unnormalize(samplerate.resample(normalize(noise), target_rate/original_rate))
 
 
-def median_absolute_deviation(data: ArrayLike) -> float:
-    return np.median(np.abs(data - np.mean(data)))
-
-
 def calculate_threshold(d1: ArrayLike, size: int, k: float = 0.5) -> float:
-    return k*median_absolute_deviation(d1)/0.6745*np.sqrt(2*np.log(size))
+    return k*np.median(np.abs(d1))/0.6745*np.sqrt(2*np.log(size))
 
 
 def snr(signal: ArrayLike, noise: ArrayLike) -> float:
