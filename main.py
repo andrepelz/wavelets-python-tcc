@@ -1,17 +1,13 @@
-import matplotlib.pyplot as plt
 import numpy as np
-from numpy.linalg import norm
-from numpy.typing import ArrayLike
+import pandas as pd
 import pywt
+
+from numpy.typing import ArrayLike
 from scipy.io import wavfile
-import samplerate
 
 
 GLOBAL_MAX_LEVEL = 8
 SIGNAL_SAMPLE_RATE = 8000
-SIGNAL_FRAME_SIZE = int(0.02*SIGNAL_SAMPLE_RATE) # 20 ms
-SIGNAL_FRAME_OVERLAP = int(SIGNAL_FRAME_SIZE*0.5) # 50% overlap
-# SIGNAL_FRAME_OVERLAP = 0
 
 SIGNAL_NAME = 'speech-librivox-0062'
 SIGNAL_FOLDER = 'musan/speech/librivox'
@@ -29,6 +25,7 @@ OUTPUT_DATA_FILENAME = f'{OUTPUT_FOLDER}/denoised_{SIGNAL_NAME}.{FILE_EXTENSION}
 NOISY_DATA_FILENAME = f'{OUTPUT_FOLDER}/noisy_{SIGNAL_NAME}.{FILE_EXTENSION}'
 NOISE_COPY_FILENAME = f'{OUTPUT_FOLDER}/noise_{NOISE_NAME}.{FILE_EXTENSION}'
 REMAINING_NOISE_FILENAME = f'{OUTPUT_FOLDER}/remaining_noise.{FILE_EXTENSION}'
+RESULTS_FILENAME = f'{OUTPUT_FOLDER}/results.csv'
 
 
 signal_sample_rate = 0
@@ -38,20 +35,28 @@ noise_sample_rate = 0
 def init_mother_wavelets() -> list[str]:
     result = []
 
-    daubechies = [ 'db4', 'db8', 'db16', 'db24', 'db32' ]
+    daubechies = [ 'db4', 'db8', 'db16' ]
     result = np.append(result, daubechies)
 
-    symlets = [ 'sym2', 'sym4', 'sym8', 'sym16' ]
+    symlets = [ 'sym4', 'sym8' ]
     result = np.append(result, symlets)
 
-    coiflets = [ 'coif2', 'coif4', 'coif8' ]
+    coiflets = [ 'coif2', 'coif4' ]
     result = np.append(result, coiflets)
 
     return result
 
 
 def init_threshold_types() -> list[str]:
-    return [ 'hard', 'soft', 'garrote' ]
+    return [ 'hard', 'soft' ]
+
+def init_k_coeffs() -> list[float]:
+    return [ 0.5, 1.0 ]
+    # return [ 0.25, 0.5, 0.75, 1.0 ]
+
+def init_m_coeffs() -> list[float]:
+    return [ 0.2, 0.6, 1.0 ]
+    # return [ 0.2, 0.4, 0.6, 0.8, 1.0 ]
 
 
 def get_input_data_from_file() -> ArrayLike:
@@ -102,8 +107,6 @@ def save_outputs_to_file(input_data: ArrayLike, noise: ArrayLike, noisy_data: Ar
 
     Path(full_path).mkdir(parents=True, exist_ok=True)
 
-    noise = resample_noise(noise, signal_sample_rate, noise_sample_rate)
-
     if FILE_EXTENSION == 'pcm':
         filename = INPUT_DATA_COPY_FILENAME
         with open(filename, 'wb') as output_file:
@@ -151,16 +154,8 @@ def unnormalize(data: ArrayLike) -> ArrayLike:
     return (data*np.power(2, 15)).astype(np.int16)
 
 
-def resample_noise(noise, original_rate, target_rate):
-    return unnormalize(samplerate.resample(normalize(noise), target_rate/original_rate))
-
-
-def median_absolute_deviation(data: ArrayLike) -> float:
-    return np.median(np.abs(data - np.mean(data)))
-
-
-def calculate_threshold(d1: ArrayLike, size: int, k: float = 0.5) -> float:
-    return k*median_absolute_deviation(d1)/0.6745*np.sqrt(2*np.log(size))
+def calculate_threshold(d1: ArrayLike, size: int, k: float = 0.8, m: float = 0.8) -> float:
+    return k*m*np.median(np.abs(d1))/0.6745*np.sqrt(2*np.log(size))
 
 
 def snr(signal: ArrayLike, noise: ArrayLike) -> float:
@@ -171,61 +166,7 @@ def snr(signal: ArrayLike, noise: ArrayLike) -> float:
 
 
 def mse(original_signal: ArrayLike, resulting_signal: ArrayLike) -> float:
-    """
-    Returns the mean squared error (MSE) between a given signal and its resulting signal
-
-    Parameters 
-    ----------
-    original_signal : array_like
-        Array object of the original signal
-    resulting_signal : array_like 
-        Array object of the resulting signal (transformed, predicted, etc.)
-
-    Returns
-    -------
-    float
-        The mean squared error value between the original signal and its resulting signal
-    """
     return np.mean(np.square(original_signal - resulting_signal))
-
-
-def frame_based_denoising_kernel(
-        noisy_data, 
-        mother_wavelet, 
-        local_max_level, 
-        threshold_type
-    ):
-    output_data = np.zeros(noisy_data.size, dtype=noisy_data.dtype)
-
-    for frame_start in np.arange(0, noisy_data.size, SIGNAL_FRAME_SIZE - SIGNAL_FRAME_OVERLAP): # frame based approach (algorithm applied independently to 400 sample frames)
-        frame_end = frame_start + SIGNAL_FRAME_SIZE
-        if frame_start + SIGNAL_FRAME_SIZE > noisy_data.size:
-            frame_end = noisy_data.size 
-
-        frame = noisy_data[frame_start:frame_end]
-        actual_frame_size = frame_end - frame_start
-
-        transform = pywt.wavedec(frame, mother_wavelet, level=local_max_level)
-
-        coefficients_d1 = transform[-1] # coefficients D1 from first level wavelet decomposition
-        threshold = calculate_threshold(coefficients_d1, frame.size, 0.8) # threshold calculated for coefficients D1
-
-        wavelet_coefficients = transform[1:]
-
-        for index, coefficients in enumerate(wavelet_coefficients):
-            wavelet_coefficients[index] = pywt.threshold(coefficients, value=threshold, mode=threshold_type)
-        
-        transform[1:] = wavelet_coefficients
-
-        reconstructed_frame = pywt.waverec(transform, mother_wavelet)
-        reconstructed_frame *= np.hamming(reconstructed_frame.size)
-
-        # reconstructed frame is sliced as it might have one more sample than the original as a side effect of the IDWT
-        # this may happen because usually, the IDWT algorithm can only be applied to signals with an even number of samples
-        # therefore, when working with an odd sample sized signal, a padding sample is added as to not affect the algorithm
-        output_data[frame_start:frame_end] += np.array(reconstructed_frame[:actual_frame_size], dtype=np.int16)
-
-    return output_data
 
 
 def evaluate_noise_reduction_algorithm(
@@ -233,10 +174,11 @@ def evaluate_noise_reduction_algorithm(
     noise: ArrayLike,
     mother_wavelet: str, 
     max_level: int, 
-    threshold_type: str
-) -> tuple[tuple[str, int, str], list[float]]:
+    threshold_type: str,
+    k_coeff: float,
+    m_coeff: float
+) -> dict:
     local_max_level = min(max_level, pywt.dwt_max_level(input_data.size, mother_wavelet))
-    # local_max_level = min(max_level, pywt.dwt_max_level(SIGNAL_FRAME_SIZE, mother_wavelet))
 
     if local_max_level < max_level: # if local max level is reduced, then further calculations will be duplicated redundant
         return (None, None)
@@ -246,14 +188,11 @@ def evaluate_noise_reduction_algorithm(
     input_mse = mse(normalize(input_data), normalize(noisy_data))
     input_snr = snr(input_data, noise)
 
-    # output_data = frame_based_denoising_kernel(noisy_data, mother_wavelet, local_max_level, threshold_type)
-
     transform = pywt.wavedec(noisy_data, mother_wavelet, level=local_max_level)
 
-    coefficients_d1 = transform[-1] # coefficients D1 from first level wavelet decomposition
-    threshold = calculate_threshold(coefficients_d1, input_data.size, 0.7) # threshold calculated for coefficients D1
-
     wavelet_coefficients = transform[1:]
+    coefficients_d1 = wavelet_coefficients[-1] # coefficients D1 from first level wavelet decomposition
+    threshold = calculate_threshold(coefficients_d1, input_data.size, k_coeff, m_coeff) # threshold calculated for coefficients D1
 
     for index, coefficients in enumerate(wavelet_coefficients):
         wavelet_coefficients[index] = pywt.threshold(coefficients, value=threshold, mode=threshold_type)
@@ -268,60 +207,85 @@ def evaluate_noise_reduction_algorithm(
     output_mse = mse(normalize(input_data), normalize(output_data))
     output_snr = snr(input_data, remaining_noise)
 
-    key = (mother_wavelet, local_max_level, threshold_type)
     values = { 
+        'mother_wavelet': mother_wavelet,
+        'local_max_level': local_max_level,
+        'threshold_type': threshold_type,
+        'k_coeff': k_coeff,
+        'm_coeff': m_coeff,
         'input_snr': input_snr, 
         'output_snr': output_snr, 
         'input_mse': input_mse, 
         'output_mse': output_mse
     }
 
-    if local_max_level == 3:
-        save_outputs_to_file(input_data, noise, noisy_data, output_data, remaining_noise)
+    save_outputs_to_file(input_data, noise, noisy_data, output_data, remaining_noise)
 
-    return (key, values)
+    return values
 
 
 def main():
-    mother_wavelets = ['coif12']
-    # mother_wavelets = init_mother_wavelets()
+    mother_wavelets = init_mother_wavelets()
     print(f'{mother_wavelets=}')
 
-    global_max_level = 5
     global_max_level = GLOBAL_MAX_LEVEL
     print(f'{global_max_level=}')
 
-    threshold_types = ['hard']
-    # threshold_types = init_threshold_types()
+    threshold_types = init_threshold_types()
     print(f'{threshold_types=}')
+
+    k_coeffs = init_k_coeffs()
+    print(f'{k_coeffs=}')
+
+    m_coeffs = init_m_coeffs()
+    print(f'{m_coeffs=}')
 
     data = get_input_data_from_file()
     noise = get_noise_from_file()
 
-    noise = resample_noise(noise, noise_sample_rate, signal_sample_rate)
+    print(f'{data=}')
+    print(f'{noise=}')
 
-    data = data[:noise.size]
+    if data.size > noise.size:
+        data = data[:noise.size]
+    else:
+        noise = noise[:data.size]
 
-    if len(data.shape) > 1:
+    if len(data.shape) > 1: # adjust noise for stereo audio
         data = np.transpose(data)
         noise = np.array([noise, noise])
         
-    noise = noise[:data.size]
-
     noise = noise//2
 
-    results = dict()
+    results = []
 
-    for wavelet in mother_wavelets:
-        for level in range(global_max_level):
-            for thresh_type in threshold_types:
-                key, values = evaluate_noise_reduction_algorithm(data, noise, wavelet, level + 1, thresh_type)
+    # for wavelet in mother_wavelets:
+    #     for level in range(1, global_max_level):
+    #         for thresh_type in threshold_types:
+    #             for k_coeff in k_coeffs:
+    #                 for m_coeff in m_coeffs:
+    #                     results.append(
+    #                         evaluate_noise_reduction_algorithm(
+    #                             data, 
+    #                             noise, 
+    #                             wavelet, 
+    #                             level, 
+    #                             thresh_type, 
+    #                             k_coeff, 
+    #                             m_coeff))
+                        
+    results.append(
+        evaluate_noise_reduction_algorithm(
+            data, 
+            noise, 
+            mother_wavelets[0], 
+            global_max_level, 
+            threshold_types[0], 
+            k_coeffs[0], 
+            m_coeffs[0]))
 
-                if key != None:
-                    results[key] = values
-
-    for key, value in results.items():
-        print(key, value)
+    dataframe = pd.DataFrame(results)
+    dataframe.to_csv(RESULTS_FILENAME)
 
 
 if __name__ == '__main__':
