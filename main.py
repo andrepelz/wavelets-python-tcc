@@ -6,7 +6,7 @@ from numpy.typing import ArrayLike
 from scipy.io import wavfile
 
 
-GLOBAL_MAX_LEVEL = 8
+GLOBAL_MAX_LEVEL = 5
 SIGNAL_SAMPLE_RATE = 8000
 
 SIGNAL_NAME = 'speech-librivox-0062'
@@ -41,9 +41,6 @@ def init_mother_wavelets() -> list[str]:
     symlets = [ 'sym4', 'sym8' ]
     result = np.append(result, symlets)
 
-    coiflets = [ 'coif2', 'coif4' ]
-    result = np.append(result, coiflets)
-
     return result
 
 
@@ -51,12 +48,10 @@ def init_threshold_types() -> list[str]:
     return [ 'hard', 'soft' ]
 
 def init_k_coeffs() -> list[float]:
-    return [ 0.5, 1.0 ]
-    # return [ 0.25, 0.5, 0.75, 1.0 ]
+    return [ 0.25, 0.5, 0.75, 1.0 ]
 
 def init_m_coeffs() -> list[float]:
-    return [ 0.2, 0.6, 1.0 ]
-    # return [ 0.2, 0.4, 0.6, 0.8, 1.0 ]
+    return [ 0.2, 0.4, 0.6, 0.8, 1.0 ]
 
 
 def get_input_data_from_file() -> ArrayLike:
@@ -259,30 +254,43 @@ def main():
 
     results = []
 
-    # for wavelet in mother_wavelets:
-    #     for level in range(1, global_max_level):
-    #         for thresh_type in threshold_types:
-    #             for k_coeff in k_coeffs:
-    #                 for m_coeff in m_coeffs:
-    #                     results.append(
-    #                         evaluate_noise_reduction_algorithm(
-    #                             data, 
-    #                             noise, 
-    #                             wavelet, 
-    #                             level, 
-    #                             thresh_type, 
-    #                             k_coeff, 
-    #                             m_coeff))
+    current_run = 1
+    total_runs = (
+        len(mother_wavelets)
+        *(global_max_level - 1)
+        *len(threshold_types)
+        *len(k_coeffs)
+        *len(m_coeffs)
+    )
+
+    for wavelet in mother_wavelets:
+        for level in range(1, global_max_level):
+            for thresh_type in threshold_types:
+                for k_coeff in k_coeffs:
+                    for m_coeff in m_coeffs:
+                        print(f'Running transform {current_run}/{total_runs}')
+                        current_run += 1
+                        results.append(
+                            evaluate_noise_reduction_algorithm(
+                                data, 
+                                noise, 
+                                wavelet, 
+                                level, 
+                                thresh_type, 
+                                k_coeff, 
+                                m_coeff
+                            )
+                        )
                         
-    results.append(
-        evaluate_noise_reduction_algorithm(
-            data, 
-            noise, 
-            mother_wavelets[0], 
-            global_max_level, 
-            threshold_types[0], 
-            k_coeffs[0], 
-            m_coeffs[0]))
+    # results.append(
+    #     evaluate_noise_reduction_algorithm(
+    #         data, 
+    #         noise, 
+    #         mother_wavelets[0], 
+    #         global_max_level, 
+    #         threshold_types[0], 
+    #         k_coeffs[0], 
+    #         m_coeffs[0]))
 
     dataframe = pd.DataFrame(results)
     dataframe.to_csv(RESULTS_FILENAME)
