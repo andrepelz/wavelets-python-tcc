@@ -9,7 +9,7 @@ from scipy.io import wavfile
 GLOBAL_MAX_LEVEL = 5
 SIGNAL_SAMPLE_RATE = 8000
 
-SIGNAL_NAME = 'speech-librivox-0062'
+SIGNAL_NAME = 'speech-librivox-0089'
 SIGNAL_FOLDER = 'musan/speech/librivox'
 NOISE_NAME = 'noise-free-sound-0287'
 NOISE_FOLDER = 'musan/noise/free-sound'
@@ -25,7 +25,6 @@ OUTPUT_DATA_FILENAME = f'{OUTPUT_FOLDER}/denoised_{SIGNAL_NAME}.{FILE_EXTENSION}
 NOISY_DATA_FILENAME = f'{OUTPUT_FOLDER}/noisy_{SIGNAL_NAME}.{FILE_EXTENSION}'
 NOISE_COPY_FILENAME = f'{OUTPUT_FOLDER}/noise_{NOISE_NAME}.{FILE_EXTENSION}'
 REMAINING_NOISE_FILENAME = f'{OUTPUT_FOLDER}/remaining_noise.{FILE_EXTENSION}'
-RESULTS_FILENAME = f'{OUTPUT_FOLDER}/results.csv'
 
 
 signal_sample_rate = 0
@@ -46,12 +45,17 @@ def init_mother_wavelets() -> list[str]:
 
 def init_threshold_types() -> list[str]:
     return [ 'hard', 'soft' ]
+    # return [ 'soft' ]
+
 
 def init_k_coeffs() -> list[float]:
     return [ 0.25, 0.5, 0.75, 1.0 ]
+    # return [ 1.0 ]
+
 
 def init_m_coeffs() -> list[float]:
     return [ 0.2, 0.4, 0.6, 0.8, 1.0 ]
+    # return [ 1.0 ]
 
 
 def get_input_data_from_file() -> ArrayLike:
@@ -139,6 +143,18 @@ def save_outputs_to_file(input_data: ArrayLike, noise: ArrayLike, noisy_data: Ar
         wavfile.write(filename, signal_sample_rate, remaining_noise)
     else:
         raise ValueError('Unknown/Unsupported file extension.')
+    
+
+def generate_white_noise(input_signal: ArrayLike, target_snr: float) -> ArrayLike:
+    signal_power = np.mean(np.square(input_signal.astype(np.float64)))
+    signal_power_db = 10*np.log10(signal_power)
+
+    noise_power_db = signal_power_db - target_snr
+    noise_power = np.power(10, noise_power_db/10)
+
+    white_noise = np.random.normal(0, np.sqrt(noise_power), input_signal.size).astype(np.int16)
+
+    return white_noise
 
 
 def normalize(data: ArrayLike) -> ArrayLike:
@@ -154,10 +170,10 @@ def calculate_threshold(d1: ArrayLike, size: int, k: float = 0.8, m: float = 0.8
 
 
 def snr(signal: ArrayLike, noise: ArrayLike) -> float:
-    signal_power = np.mean(np.square(signal.astype(np.float64), dtype=np.float64))
-    noise_power = np.mean(np.square(noise.astype(np.float64), dtype=np.float64))
+    signal_power_db = 10*np.log10(np.mean(np.square(signal.astype(np.float64))))
+    noise_power_db = 10*np.log10(np.mean(np.square(noise.astype(np.float64))))
 
-    return 10*np.log10(signal_power/noise_power)
+    return signal_power_db - noise_power_db
 
 
 def mse(original_signal: ArrayLike, resulting_signal: ArrayLike) -> float:
@@ -214,29 +230,76 @@ def evaluate_noise_reduction_algorithm(
         'output_mse': output_mse
     }
 
-    save_outputs_to_file(input_data, noise, noisy_data, output_data, remaining_noise)
+    if local_max_level == 3:
+        save_outputs_to_file(input_data, noise, noisy_data, output_data, remaining_noise)
 
     return values
 
 
+def sort_dataset_by_snr(dataset: pd.DataFrame) -> pd.DataFrame:
+    return dataset.sort_values('output_snr', ascending=False)
+
+
+def sort_dataset_by_mse(dataset: pd.DataFrame) -> pd.DataFrame:
+    return dataset.sort_values('output_mse', ascending=True)
+
+
+def save_results(results: pd.DataFrame) -> None:
+    from pathlib import Path
+    import os
+
+    absolute_path = os.path.dirname(__file__)
+    full_path = os.path.join(absolute_path, f'{OUTPUT_FOLDER}')
+
+    Path(full_path).mkdir(parents=True, exist_ok=True)
+    os.chmod(full_path, 0o770)
+
+    raw_rel_path = f'{OUTPUT_FOLDER}/results_raw.csv'
+    snr_rel_path = f'{OUTPUT_FOLDER}/results_by_snr.csv'
+    mse_rel_path = f'{OUTPUT_FOLDER}/results_by_mse.csv'
+
+    results_by_snr = sort_dataset_by_snr(results)
+    results_by_mse = sort_dataset_by_mse(results)
+
+    results.to_csv(raw_rel_path)
+    results_by_snr.to_csv(snr_rel_path)
+    results_by_mse.to_csv(mse_rel_path)
+
+    print('Results saved to files: \n' 
+          + f' - {raw_rel_path}\n'
+          + f' - {snr_rel_path}\n'
+          + f' - {mse_rel_path}')
+
+
 def main():
-    mother_wavelets = init_mother_wavelets()
+    # mother_wavelets = init_mother_wavelets()
+    mother_wavelets = [ 'db5' ]
     print(f'{mother_wavelets=}')
 
-    global_max_level = GLOBAL_MAX_LEVEL
+    # global_max_level = GLOBAL_MAX_LEVEL
+    global_max_level = 6
     print(f'{global_max_level=}')
 
-    threshold_types = init_threshold_types()
+    # threshold_types = init_threshold_types()
+    threshold_types = [ 'soft' ]
     print(f'{threshold_types=}')
 
-    k_coeffs = init_k_coeffs()
+    # k_coeffs = init_k_coeffs()
+    k_coeffs = [ 1 ]
     print(f'{k_coeffs=}')
 
-    m_coeffs = init_m_coeffs()
+    # m_coeffs = init_m_coeffs()
+    m_coeffs = [ 1 ]
     print(f'{m_coeffs=}')
 
     data = get_input_data_from_file()
-    noise = get_noise_from_file()
+    # noise = get_noise_from_file()
+    noise = generate_white_noise(data, 5)[:1000000]
+
+    global signal_sample_rate
+    global noise_sample_rate
+
+    noise_sample_rate = signal_sample_rate
 
     print(f'{data=}')
     print(f'{noise=}')
@@ -250,8 +313,6 @@ def main():
         data = np.transpose(data)
         noise = np.array([noise, noise])
         
-    noise = noise//2
-
     results = []
 
     current_run = 1
@@ -281,19 +342,9 @@ def main():
                                 m_coeff
                             )
                         )
-                        
-    # results.append(
-    #     evaluate_noise_reduction_algorithm(
-    #         data, 
-    #         noise, 
-    #         mother_wavelets[0], 
-    #         global_max_level, 
-    #         threshold_types[0], 
-    #         k_coeffs[0], 
-    #         m_coeffs[0]))
 
-    dataframe = pd.DataFrame(results)
-    dataframe.to_csv(RESULTS_FILENAME)
+    results = pd.DataFrame(results)
+    save_results(results)
 
 
 if __name__ == '__main__':
