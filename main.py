@@ -9,7 +9,7 @@ from scipy.io import wavfile
 GLOBAL_MAX_LEVEL = 5
 SIGNAL_SAMPLE_RATE = 8000
 
-SIGNAL_NAME = 'speech-librivox-0089'
+SIGNAL_NAME = 'speech-librivox-0169'
 SIGNAL_FOLDER = 'musan/speech/librivox'
 NOISE_NAME = 'noise-free-sound-0287'
 NOISE_FOLDER = 'musan/noise/free-sound'
@@ -20,6 +20,9 @@ FILE_EXTENSION = 'wav'
 INPUT_DATA_FILENAME = f'{SIGNAL_FOLDER}/{SIGNAL_NAME}.{FILE_EXTENSION}'
 NOISE_FILENAME = f'{NOISE_FOLDER}/{NOISE_NAME}.{FILE_EXTENSION}'
 
+RESULTS_RAW_FILENAME = f'{OUTPUT_FOLDER}/results_raw.csv'
+RESULTS_SNR_FILENAME = f'{OUTPUT_FOLDER}/results_snr.csv'
+RESULTS_MSE_FILENAME = f'{OUTPUT_FOLDER}/results_mse.csv'
 INPUT_DATA_COPY_FILENAME = f'{OUTPUT_FOLDER}/{SIGNAL_NAME}.{FILE_EXTENSION}'
 OUTPUT_DATA_FILENAME = f'{OUTPUT_FOLDER}/denoised_{SIGNAL_NAME}.{FILE_EXTENSION}'
 NOISY_DATA_FILENAME = f'{OUTPUT_FOLDER}/noisy_{SIGNAL_NAME}.{FILE_EXTENSION}'
@@ -45,17 +48,14 @@ def init_mother_wavelets() -> list[str]:
 
 def init_threshold_types() -> list[str]:
     return [ 'hard', 'soft' ]
-    # return [ 'soft' ]
 
 
 def init_k_coeffs() -> list[float]:
     return [ 0.25, 0.5, 0.75, 1.0 ]
-    # return [ 1.0 ]
 
 
 def init_m_coeffs() -> list[float]:
     return [ 0.2, 0.4, 0.6, 0.8, 1.0 ]
-    # return [ 1.0 ]
 
 
 def get_input_data_from_file() -> ArrayLike:
@@ -180,6 +180,36 @@ def mse(original_signal: ArrayLike, resulting_signal: ArrayLike) -> float:
     return np.mean(np.square(original_signal - resulting_signal))
 
 
+def save_artifacts_from_configuration(
+    input_data: ArrayLike, 
+    noise: ArrayLike,
+    mother_wavelet: str, 
+    max_level: int, 
+    threshold_type: str,
+    k_coeff: float,
+    m_coeff: float
+) -> dict:
+    noisy_data = input_data + noise
+
+    transform = pywt.wavedec(noisy_data, mother_wavelet, level=max_level)
+
+    wavelet_coefficients = transform[1:]
+    coefficients_d1 = wavelet_coefficients[-1] # coefficients D1 from first level wavelet decomposition
+    threshold = calculate_threshold(coefficients_d1, input_data.size, k_coeff, m_coeff) # threshold calculated for coefficients D1
+
+    for index, coefficients in enumerate(wavelet_coefficients):
+        wavelet_coefficients[index] = pywt.threshold(coefficients, value=threshold, mode=threshold_type)
+    
+    transform[1:] = wavelet_coefficients
+
+    output_data = pywt.waverec(transform, mother_wavelet)
+    output_data = output_data[:input_data.size].astype(np.int16)
+
+    remaining_noise = output_data - input_data
+
+    save_outputs_to_file(input_data, noise, noisy_data, output_data, remaining_noise)
+
+
 def evaluate_noise_reduction_algorithm(
     input_data: ArrayLike, 
     noise: ArrayLike,
@@ -230,9 +260,6 @@ def evaluate_noise_reduction_algorithm(
         'output_mse': output_mse
     }
 
-    if local_max_level == 3:
-        save_outputs_to_file(input_data, noise, noisy_data, output_data, remaining_noise)
-
     return values
 
 
@@ -244,7 +271,7 @@ def sort_dataset_by_mse(dataset: pd.DataFrame) -> pd.DataFrame:
     return dataset.sort_values('output_mse', ascending=True)
 
 
-def save_results(results: pd.DataFrame) -> None:
+def save_results(results: pd.DataFrame, input_data: ArrayLike, noise: ArrayLike) -> None:
     from pathlib import Path
     import os
 
@@ -254,21 +281,32 @@ def save_results(results: pd.DataFrame) -> None:
     Path(full_path).mkdir(parents=True, exist_ok=True)
     os.chmod(full_path, 0o770)
 
-    raw_rel_path = f'{OUTPUT_FOLDER}/results_raw.csv'
-    snr_rel_path = f'{OUTPUT_FOLDER}/results_by_snr.csv'
-    mse_rel_path = f'{OUTPUT_FOLDER}/results_by_mse.csv'
-
     results_by_snr = sort_dataset_by_snr(results)
     results_by_mse = sort_dataset_by_mse(results)
 
-    results.to_csv(raw_rel_path)
-    results_by_snr.to_csv(snr_rel_path)
-    results_by_mse.to_csv(mse_rel_path)
+    best_config = results_by_snr.iloc[0]
 
-    print('Results saved to files: \n' 
-          + f' - {raw_rel_path}\n'
-          + f' - {snr_rel_path}\n'
-          + f' - {mse_rel_path}')
+    save_artifacts_from_configuration(
+        input_data,
+        noise,
+        best_config['mother_wavelet'],
+        best_config['local_max_level'],
+        best_config['threshold_type'],
+        best_config['k_coeff'],
+        best_config['m_coeff']
+    )
+
+    results.to_csv(RESULTS_RAW_FILENAME)
+    results_by_snr.to_csv(RESULTS_SNR_FILENAME)
+    results_by_mse.to_csv(RESULTS_MSE_FILENAME)
+
+    print(f'Results saved to folder: {OUTPUT_FOLDER}')
+    print(f'Best configuration: \n'
+        + f'- Mother Wavelet: {best_config["mother_wavelet"]}\n'
+        + f'- Wavelet transform level: {best_config["local_max_level"]}\n'
+        + f'- Threshold type: {best_config["threshold_type"]}\n'
+        + f'- \"k\" coefficient: {best_config["k_coeff"]}\n'
+        + f'- \"m\" coefficient: {best_config["m_coeff"]}')
 
 
 def main():
@@ -281,7 +319,7 @@ def main():
     print(f'{global_max_level=}')
 
     # threshold_types = init_threshold_types()
-    threshold_types = [ 'soft' ]
+    threshold_types = [ 'hard', 'soft' ]
     print(f'{threshold_types=}')
 
     # k_coeffs = init_k_coeffs()
@@ -292,17 +330,15 @@ def main():
     m_coeffs = [ 1 ]
     print(f'{m_coeffs=}')
 
-    data = get_input_data_from_file()
-    # noise = get_noise_from_file()
-    noise = generate_white_noise(data, 5)[:1000000]
+    print()
 
-    global signal_sample_rate
+    data = get_input_data_from_file()[:signal_sample_rate*30]
+    # noise = get_noise_from_file()
+    noise = generate_white_noise(data, 5)[:signal_sample_rate*30]
+
     global noise_sample_rate
 
     noise_sample_rate = signal_sample_rate
-
-    print(f'{data=}')
-    print(f'{noise=}')
 
     if data.size > noise.size:
         data = data[:noise.size]
@@ -343,8 +379,10 @@ def main():
                             )
                         )
 
+    print()
+
     results = pd.DataFrame(results)
-    save_results(results)
+    save_results(results, data, noise)
 
 
 if __name__ == '__main__':
