@@ -1,7 +1,7 @@
 *.pcm
 *.wav
-/__pycache__
-/MUSAN
-/musan
-/outputs
-/my-files
+__pycache__
+MUSAN
+musan
+outputs
+my-files
