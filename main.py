@@ -7,11 +7,11 @@ from scipy.io import wavfile
 
 
 GLOBAL_MAX_LEVEL = 5
-SIGNAL_SAMPLE_RATE = 8000
+SIGNAL_SAMPLE_RATE = 16000
 
-SIGNAL_NAME = 'speech-librivox-0169'
+SIGNAL_NAME = 'speech-librivox-0097'
 SIGNAL_FOLDER = 'musan/speech/librivox'
-NOISE_NAME = 'noise-free-sound-0287'
+NOISE_NAME = 'white_noise_5db'
 NOISE_FOLDER = 'musan/noise/free-sound'
 OUTPUT_FOLDER = f'outputs/{SIGNAL_NAME}'
 
@@ -180,6 +180,52 @@ def mse(original_signal: ArrayLike, resulting_signal: ArrayLike) -> float:
     return np.mean(np.square(original_signal - resulting_signal))
 
 
+def sort_dataset_by_snr(dataset: pd.DataFrame) -> pd.DataFrame:
+    return dataset.sort_values('output_snr', ascending=False)
+
+
+def sort_dataset_by_mse(dataset: pd.DataFrame) -> pd.DataFrame:
+    return dataset.sort_values('output_mse', ascending=True)
+
+
+def save_results(results: pd.DataFrame, input_data: ArrayLike, noise: ArrayLike) -> None:
+    from pathlib import Path
+    import os
+
+    absolute_path = os.path.dirname(__file__)
+    full_path = os.path.join(absolute_path, f'{OUTPUT_FOLDER}')
+
+    Path(full_path).mkdir(parents=True, exist_ok=True)
+    os.chmod(full_path, 0o770)
+
+    results_by_snr = sort_dataset_by_snr(results)
+    results_by_mse = sort_dataset_by_mse(results)
+
+    best_config = results_by_snr.iloc[0]
+
+    save_artifacts_from_configuration(
+        input_data,
+        noise,
+        best_config['mother_wavelet'],
+        best_config['local_max_level'],
+        best_config['threshold_type'],
+        best_config['k_coeff'],
+        best_config['m_coeff']
+    )
+
+    results.to_csv(RESULTS_RAW_FILENAME)
+    results_by_snr.to_csv(RESULTS_SNR_FILENAME)
+    results_by_mse.to_csv(RESULTS_MSE_FILENAME)
+
+    print(f'Results saved to folder: {OUTPUT_FOLDER}')
+    print(f'Best configuration: \n'
+        + f'- Mother Wavelet: {best_config["mother_wavelet"]}\n'
+        + f'- Wavelet transform level: {best_config["local_max_level"]}\n'
+        + f'- Threshold type: {best_config["threshold_type"]}\n'
+        + f'- \"k\" coefficient: {best_config["k_coeff"]}\n'
+        + f'- \"m\" coefficient: {best_config["m_coeff"]}')
+
+
 def save_artifacts_from_configuration(
     input_data: ArrayLike, 
     noise: ArrayLike,
@@ -261,52 +307,6 @@ def evaluate_noise_reduction_algorithm(
     }
 
     return values
-
-
-def sort_dataset_by_snr(dataset: pd.DataFrame) -> pd.DataFrame:
-    return dataset.sort_values('output_snr', ascending=False)
-
-
-def sort_dataset_by_mse(dataset: pd.DataFrame) -> pd.DataFrame:
-    return dataset.sort_values('output_mse', ascending=True)
-
-
-def save_results(results: pd.DataFrame, input_data: ArrayLike, noise: ArrayLike) -> None:
-    from pathlib import Path
-    import os
-
-    absolute_path = os.path.dirname(__file__)
-    full_path = os.path.join(absolute_path, f'{OUTPUT_FOLDER}')
-
-    Path(full_path).mkdir(parents=True, exist_ok=True)
-    os.chmod(full_path, 0o770)
-
-    results_by_snr = sort_dataset_by_snr(results)
-    results_by_mse = sort_dataset_by_mse(results)
-
-    best_config = results_by_snr.iloc[0]
-
-    save_artifacts_from_configuration(
-        input_data,
-        noise,
-        best_config['mother_wavelet'],
-        best_config['local_max_level'],
-        best_config['threshold_type'],
-        best_config['k_coeff'],
-        best_config['m_coeff']
-    )
-
-    results.to_csv(RESULTS_RAW_FILENAME)
-    results_by_snr.to_csv(RESULTS_SNR_FILENAME)
-    results_by_mse.to_csv(RESULTS_MSE_FILENAME)
-
-    print(f'Results saved to folder: {OUTPUT_FOLDER}')
-    print(f'Best configuration: \n'
-        + f'- Mother Wavelet: {best_config["mother_wavelet"]}\n'
-        + f'- Wavelet transform level: {best_config["local_max_level"]}\n'
-        + f'- Threshold type: {best_config["threshold_type"]}\n'
-        + f'- \"k\" coefficient: {best_config["k_coeff"]}\n'
-        + f'- \"m\" coefficient: {best_config["m_coeff"]}')
 
 
 def main():
