@@ -69,27 +69,19 @@ class Modwt:
             step_wavelet_filter: ArrayLike) -> tuple[ArrayLike, ArrayLike]:
         if step_scaling_filter.size != step_wavelet_filter.size:
             raise RuntimeError('Incompatible scaling and wavelet filters')
+        
+        filter_size = step_scaling_filter.size
 
-        input_size = data_in.size
+        scaling_buffer = np.zeros(filter_size*current_level - (current_level - 1))
+        wavelet_buffer = np.zeros(filter_size*current_level - (current_level - 1))
 
-        approx_out = np.array([], dtype=data_in.dtype)
-        detail_out = np.array([], dtype=data_in.dtype)
+        padded_data_in = np.concatenate((data_in[-(scaling_buffer.size - 1):], data_in))
 
-        for t in np.arange(data_in.size):
-            k = t
+        scaling_buffer[::current_level] = step_scaling_filter
+        wavelet_buffer[::current_level] = step_wavelet_filter
 
-            buffer_step = np.power(2, current_level - 1)
-            input_buffer = np.array([data_in[k]], dtype=data_in.dtype)
-
-            for _ in np.arange(1, step_scaling_filter.size):
-                k = (k - buffer_step + input_size)%input_size
-                input_buffer = np.concatenate([ input_buffer, [data_in[k]] ])
-
-            item_approx_out = np.sum(input_buffer*step_scaling_filter)
-            item_detail_out = np.sum(input_buffer*step_wavelet_filter)
-
-            approx_out = np.concatenate([ approx_out, [item_approx_out] ])
-            detail_out = np.concatenate([ detail_out, [item_detail_out] ])
+        approx_out = np.convolve(padded_data_in, scaling_buffer, mode='valid')
+        detail_out = np.convolve(padded_data_in, wavelet_buffer, mode='valid')
 
         return (approx_out, detail_out)
 
@@ -102,27 +94,20 @@ class Modwt:
             step_inverse_wavelet_filter: ArrayLike) -> ArrayLike:
         if step_inverse_scaling_filter.size != step_inverse_wavelet_filter.size:
             raise RuntimeError('Incompatible scaling and wavelet filters')
+        
+        filter_size = step_inverse_scaling_filter.size
 
-        input_size = approx_in.size
+        scaling_buffer = np.zeros(filter_size*current_level - (current_level - 1))
+        wavelet_buffer = np.zeros(filter_size*current_level - (current_level - 1))
 
-        approx_out = np.array([], dtype=approx_in.dtype)
+        padded_approx_in = np.concatenate((approx_in, approx_in[:(scaling_buffer.size - 1)]))
+        padded_detail_in = np.concatenate((detail_in, detail_in[:(scaling_buffer.size - 1)]))
 
-        for t in np.arange(approx_in.size):
-            k = t
+        scaling_buffer[::-current_level] = step_inverse_scaling_filter
+        wavelet_buffer[::-current_level] = step_inverse_wavelet_filter
 
-            buffer_step = np.power(2, current_level - 1)
-            input_approx_buffer = np.array([approx_in[k]], dtype=approx_in.dtype)
-            input_detail_buffer = np.array([detail_in[k]], dtype=approx_in.dtype)
-
-            for _ in np.arange(1, step_inverse_scaling_filter.size):
-                k = (k + buffer_step)%input_size
-                input_approx_buffer = np.concatenate([ input_approx_buffer, [approx_in[k]] ])
-                input_detail_buffer = np.concatenate([ input_detail_buffer, [detail_in[k]] ])
-
-            item_approx_out = (np.sum(input_approx_buffer*step_inverse_scaling_filter) 
-                               + np.sum(input_detail_buffer*step_inverse_wavelet_filter))
-
-            approx_out = np.concatenate([ approx_out, [item_approx_out] ])
+        approx_out = (np.convolve(padded_approx_in, scaling_buffer, mode='valid') 
+                      + np.convolve(padded_detail_in, wavelet_buffer, mode='valid'))
 
         return approx_out
     
