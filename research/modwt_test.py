@@ -1,6 +1,6 @@
 import numpy as np
 import pywt
-from modwt import Modwt
+from modwt import Modwt, modwt_wavedec, modwt_waverec
 
 def main():
     array = np.arange(32, dtype=np.int16)
@@ -30,5 +30,14 @@ def main():
     # print(transform)
     inverse_transform = Modwt.inverse_transform(transform, 6, scaling_filter, wavelet_filter)
     # inverse_transform = Modwt._step_inverse_transform(transform[0], transform[1], 1, scaling_filter/np.sqrt(2), wavelet_filter/np.sqrt(2))
+
+    mother_wavelet = 'db5'
+
+    transform = modwt_wavedec(array, mother_wavelet, 5)
+    inverse_transform = modwt_waverec(transform, mother_wavelet)
+
     print(inverse_transform)
     print(np.round(inverse_transform).astype(np.int16))
+
+if __name__ == '__main__':
+    main()

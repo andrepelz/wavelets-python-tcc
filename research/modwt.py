@@ -1,5 +1,26 @@
 import numpy as np
 from numpy.typing import ArrayLike
+import pywt
+
+def modwt_wavedec(data: ArrayLike, mother_wavelet: str, level: int = 1) -> ArrayLike:
+    filters = pywt.Wavelet(mother_wavelet)
+
+    scaling_filter = filters.dec_lo
+    wavelet_filter = filters.dec_hi
+    
+    return Modwt.transform(data, level, scaling_filter, wavelet_filter)
+
+
+def modwt_waverec(data: ArrayLike, mother_wavelet: str) -> ArrayLike:
+    filters = pywt.Wavelet(mother_wavelet)
+
+    scaling_filter = filters.dec_lo
+    wavelet_filter = filters.dec_hi
+
+    level = len(data) - 1
+    
+    return Modwt.inverse_transform(data, level, scaling_filter, wavelet_filter)
+
 
 class Modwt:
     @staticmethod
@@ -7,7 +28,7 @@ class Modwt:
             data: ArrayLike, 
             level: int,
             scaling_filter: ArrayLike, 
-            wavelet_filter: ArrayLike):
+            wavelet_filter: ArrayLike) -> ArrayLike:
         result = np.array([data.astype(np.float64)])
 
         for current_level in np.arange(1, level + 1):
@@ -27,7 +48,7 @@ class Modwt:
             data: ArrayLike, 
             level: int,
             inverse_scaling_filter: ArrayLike, 
-            inverse_wavelet_filter: ArrayLike):
+            inverse_wavelet_filter: ArrayLike) -> ArrayLike:
         result = data[0]
 
         for current_level in np.arange(level, 0, -1):
