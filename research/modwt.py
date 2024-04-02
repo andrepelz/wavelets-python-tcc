@@ -5,8 +5,8 @@ import pywt
 def modwt_wavedec(data: ArrayLike, mother_wavelet: str, level: int = 1) -> ArrayLike:
     filters = pywt.Wavelet(mother_wavelet)
 
-    scaling_filter = filters.dec_lo
-    wavelet_filter = filters.dec_hi
+    scaling_filter = np.array(filters.dec_lo/np.sqrt(2))
+    wavelet_filter = np.array(filters.dec_hi/np.sqrt(2))
     
     return Modwt.transform(data, level, scaling_filter, wavelet_filter)
 
@@ -14,8 +14,8 @@ def modwt_wavedec(data: ArrayLike, mother_wavelet: str, level: int = 1) -> Array
 def modwt_waverec(data: ArrayLike, mother_wavelet: str) -> ArrayLike:
     filters = pywt.Wavelet(mother_wavelet)
 
-    scaling_filter = filters.dec_lo
-    wavelet_filter = filters.dec_hi
+    scaling_filter = np.array(filters.rec_lo/np.sqrt(2))
+    wavelet_filter = np.array(filters.rec_hi/np.sqrt(2))
 
     level = len(data) - 1
     
@@ -35,8 +35,8 @@ class Modwt:
             result[0], detail_k = Modwt._step_transform(
                 result[0], 
                 current_level,
-                scaling_filter/np.sqrt(2),
-                wavelet_filter/np.sqrt(2))
+                scaling_filter,
+                wavelet_filter)
             
             result = np.concatenate((result, [detail_k]))
 
@@ -56,8 +56,8 @@ class Modwt:
                 result, 
                 data[current_level], 
                 current_level, 
-                inverse_scaling_filter/np.sqrt(2),
-                inverse_wavelet_filter/np.sqrt(2))
+                inverse_scaling_filter,
+                inverse_wavelet_filter)
             
         return result
 
@@ -65,20 +65,20 @@ class Modwt:
     def _step_transform(
             data_in: ArrayLike, 
             current_level: int,
-            step_scaling_filter: ArrayLike, 
-            step_wavelet_filter: ArrayLike) -> tuple[ArrayLike, ArrayLike]:
-        if step_scaling_filter.size != step_wavelet_filter.size:
+            scaling_filter: ArrayLike, 
+            wavelet_filter: ArrayLike) -> tuple[ArrayLike, ArrayLike]:
+        if scaling_filter.size != wavelet_filter.size:
             raise RuntimeError('Incompatible scaling and wavelet filters')
         
-        filter_size = step_scaling_filter.size
+        filter_size = scaling_filter.size
 
         scaling_buffer = np.zeros(filter_size*current_level - (current_level - 1))
         wavelet_buffer = np.zeros(filter_size*current_level - (current_level - 1))
 
         padded_data_in = np.concatenate((data_in[-(scaling_buffer.size - 1):], data_in))
 
-        scaling_buffer[::current_level] = step_scaling_filter
-        wavelet_buffer[::current_level] = step_wavelet_filter
+        scaling_buffer[::current_level] = scaling_filter
+        wavelet_buffer[::current_level] = wavelet_filter
 
         approx_out = np.convolve(padded_data_in, scaling_buffer, mode='valid')
         detail_out = np.convolve(padded_data_in, wavelet_buffer, mode='valid')
@@ -90,12 +90,12 @@ class Modwt:
             approx_in: ArrayLike, 
             detail_in: ArrayLike, 
             current_level: int,
-            step_inverse_scaling_filter: ArrayLike, 
-            step_inverse_wavelet_filter: ArrayLike) -> ArrayLike:
-        if step_inverse_scaling_filter.size != step_inverse_wavelet_filter.size:
+            inverse_scaling_filter: ArrayLike, 
+            inverse_wavelet_filter: ArrayLike) -> ArrayLike:
+        if inverse_scaling_filter.size != inverse_wavelet_filter.size:
             raise RuntimeError('Incompatible scaling and wavelet filters')
         
-        filter_size = step_inverse_scaling_filter.size
+        filter_size = inverse_scaling_filter.size
 
         scaling_buffer = np.zeros(filter_size*current_level - (current_level - 1))
         wavelet_buffer = np.zeros(filter_size*current_level - (current_level - 1))
@@ -103,8 +103,8 @@ class Modwt:
         padded_approx_in = np.concatenate((approx_in, approx_in[:(scaling_buffer.size - 1)]))
         padded_detail_in = np.concatenate((detail_in, detail_in[:(scaling_buffer.size - 1)]))
 
-        scaling_buffer[::-current_level] = step_inverse_scaling_filter
-        wavelet_buffer[::-current_level] = step_inverse_wavelet_filter
+        scaling_buffer[::current_level] = inverse_scaling_filter
+        wavelet_buffer[::current_level] = inverse_wavelet_filter
 
         approx_out = (np.convolve(padded_approx_in, scaling_buffer, mode='valid') 
                       + np.convolve(padded_detail_in, wavelet_buffer, mode='valid'))

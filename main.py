@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import pywt
+from research.modwt import modwt_waverec, modwt_wavedec
 
 from numpy.typing import ArrayLike
 from scipy.io import wavfile
@@ -9,11 +10,11 @@ from scipy.io import wavfile
 GLOBAL_MAX_LEVEL = 5
 SIGNAL_SAMPLE_RATE = 16000
 
-SIGNAL_NAME = 'speech-librivox-0097'
+SIGNAL_NAME = 'speech-librivox-0062'
 SIGNAL_FOLDER = 'musan/speech/librivox'
 NOISE_NAME = 'white_noise_5db'
 NOISE_FOLDER = 'musan/noise/free-sound'
-OUTPUT_FOLDER = f'outputs/{SIGNAL_NAME}'
+OUTPUT_FOLDER = f'tcc/results/{SIGNAL_NAME}'
 
 FILE_EXTENSION = 'wav'
 
@@ -213,9 +214,9 @@ def save_results(results: pd.DataFrame, input_data: ArrayLike, noise: ArrayLike)
         best_config['m_coeff']
     )
 
-    results.to_csv(RESULTS_RAW_FILENAME)
-    results_by_snr.to_csv(RESULTS_SNR_FILENAME)
-    results_by_mse.to_csv(RESULTS_MSE_FILENAME)
+    results.to_csv(RESULTS_RAW_FILENAME, sep=';', decimal=',')
+    results_by_snr.to_csv(RESULTS_SNR_FILENAME, sep=';', decimal=',')
+    results_by_mse.to_csv(RESULTS_MSE_FILENAME, sep=';', decimal=',')
 
     print(f'Results saved to folder: {OUTPUT_FOLDER}')
     print(f'Best configuration: \n'
@@ -310,24 +311,24 @@ def evaluate_noise_reduction_algorithm(
 
 
 def main():
-    # mother_wavelets = init_mother_wavelets()
-    mother_wavelets = [ 'db5' ]
+    mother_wavelets = init_mother_wavelets()
+    # mother_wavelets = [ 'db5' ]
     print(f'{mother_wavelets=}')
 
-    # global_max_level = GLOBAL_MAX_LEVEL
-    global_max_level = 6
+    global_max_level = GLOBAL_MAX_LEVEL
+    # global_max_level = 6
     print(f'{global_max_level=}')
 
-    # threshold_types = init_threshold_types()
-    threshold_types = [ 'hard', 'soft' ]
+    threshold_types = init_threshold_types()
+    # threshold_types = [ 'hard', 'soft' ]
     print(f'{threshold_types=}')
 
-    # k_coeffs = init_k_coeffs()
-    k_coeffs = [ 1 ]
+    k_coeffs = init_k_coeffs()
+    # k_coeffs = [ 1 ]
     print(f'{k_coeffs=}')
 
-    # m_coeffs = init_m_coeffs()
-    m_coeffs = [ 1 ]
+    m_coeffs = init_m_coeffs()
+    # m_coeffs = [ 1 ]
     print(f'{m_coeffs=}')
 
     print()
@@ -361,7 +362,7 @@ def main():
     )
 
     for wavelet in mother_wavelets:
-        for level in range(1, global_max_level):
+        for level in range(1, global_max_level + 1):
             for thresh_type in threshold_types:
                 for k_coeff in k_coeffs:
                     for m_coeff in m_coeffs:

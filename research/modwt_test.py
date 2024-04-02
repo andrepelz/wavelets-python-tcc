@@ -3,35 +3,39 @@ import pywt
 from modwt import Modwt, modwt_wavedec, modwt_waverec
 
 def main():
-    array = np.arange(32, dtype=np.int16)
+    array = np.arange(1024, dtype=np.int16)
 
     wavelet = pywt.Wavelet('db5')
 
-    scaling_filter = wavelet.dec_lo
-    wavelet_filter = wavelet.dec_hi
+    dec_scaling_filter = wavelet.dec_lo/np.sqrt(2)
+    dec_wavelet_filter = wavelet.dec_hi/np.sqrt(2)
+    rec_scaling_filter = wavelet.rec_lo/np.sqrt(2)
+    rec_wavelet_filter = wavelet.rec_hi/np.sqrt(2)
 
-    transform = Modwt._step_transform(array, 1, scaling_filter/np.sqrt(2), wavelet_filter/np.sqrt(2))
-    approx, detail = Modwt._step_transform(transform[0], 2, scaling_filter/np.sqrt(2), wavelet_filter/np.sqrt(2))
-    inverse_transform = Modwt._step_inverse_transform(approx, detail, 2, scaling_filter/np.sqrt(2), wavelet_filter/np.sqrt(2))
-    inverse_transform = Modwt._step_inverse_transform(inverse_transform, transform[1], 1, scaling_filter/np.sqrt(2), wavelet_filter/np.sqrt(2))
+    transform = Modwt._step_transform(array, 1, dec_scaling_filter, dec_wavelet_filter)
+    approx, detail = Modwt._step_transform(transform[0], 2, dec_scaling_filter, dec_wavelet_filter)
+    inverse_transform = Modwt._step_inverse_transform(approx, detail, 2, rec_scaling_filter, rec_wavelet_filter)
+    inverse_transform = Modwt._step_inverse_transform(inverse_transform, transform[1], 1, rec_scaling_filter, rec_wavelet_filter)
 
     # print(transform)
     print(inverse_transform)
     print(np.round(inverse_transform).astype(np.int16))
 
-    old_transform = np.copy(transform)
-    old_inverse_transform = np.copy(inverse_transform)
+    print()
+    print('===========================================================')
+    print()
+
+    transform = Modwt.transform(array, 6, dec_scaling_filter, dec_wavelet_filter)
+    inverse_transform = Modwt.inverse_transform(transform, 6, rec_scaling_filter, rec_wavelet_filter)
+
+    print(inverse_transform)
+    print(np.round(inverse_transform).astype(np.int16))
 
     print()
     print('===========================================================')
     print()
 
-    transform = Modwt.transform(array, 6, scaling_filter, wavelet_filter)
-    # print(transform)
-    inverse_transform = Modwt.inverse_transform(transform, 6, scaling_filter, wavelet_filter)
-    # inverse_transform = Modwt._step_inverse_transform(transform[0], transform[1], 1, scaling_filter/np.sqrt(2), wavelet_filter/np.sqrt(2))
-
-    mother_wavelet = 'db5'
+    mother_wavelet = 'db1'
 
     transform = modwt_wavedec(array, mother_wavelet, 5)
     inverse_transform = modwt_waverec(transform, mother_wavelet)
