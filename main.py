@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import pywt
+from time import perf_counter_ns
 from research.modwt import modwt_waverec, modwt_wavedec
 
 from numpy.typing import ArrayLike
@@ -10,16 +11,19 @@ from scipy.io import wavfile
 GLOBAL_MAX_LEVEL = 5
 SIGNAL_SAMPLE_RATE = 16000
 
-SIGNAL_NAME = 'speech-librivox-0062'
-SIGNAL_FOLDER = 'musan/speech/librivox'
+SIGNAL_NAME = 'speech-librivox-0005'
+# SIGNAL_FOLDER = 'musan/speech/librivox'
 NOISE_NAME = 'white_noise_5db'
-NOISE_FOLDER = 'musan/noise/free-sound'
-OUTPUT_FOLDER = f'tcc/results/{SIGNAL_NAME}'
+# NOISE_FOLDER = 'musan/noise/free-sound'
+INPUT_SUBFOLDER = 'portugues'
+NOISE_SUBFOLDER = 'ruido'
+INPUT_FOLDER = f'inputs'
+OUTPUT_FOLDER = f'outputs/{SIGNAL_NAME}&{NOISE_NAME}'
 
 FILE_EXTENSION = 'wav'
 
-INPUT_DATA_FILENAME = f'{SIGNAL_FOLDER}/{SIGNAL_NAME}.{FILE_EXTENSION}'
-NOISE_FILENAME = f'{NOISE_FOLDER}/{NOISE_NAME}.{FILE_EXTENSION}'
+INPUT_DATA_FILENAME = f'{INPUT_FOLDER}/{INPUT_SUBFOLDER}/{SIGNAL_NAME}.{FILE_EXTENSION}'
+NOISE_FILENAME = f'{INPUT_FOLDER}/{NOISE_SUBFOLDER}/{NOISE_NAME}.{FILE_EXTENSION}'
 
 RESULTS_RAW_FILENAME = f'{OUTPUT_FOLDER}/results_raw.csv'
 RESULTS_SNR_FILENAME = f'{OUTPUT_FOLDER}/results_snr.csv'
@@ -38,10 +42,10 @@ noise_sample_rate = 0
 def init_mother_wavelets() -> list[str]:
     result = []
 
-    daubechies = [ 'db4', 'db8', 'db16' ]
+    daubechies = [ 'db2', 'db5', 'db8' ]
     result = np.append(result, daubechies)
 
-    symlets = [ 'sym4', 'sym8' ]
+    symlets = [ 'sym2', 'sym4' ]
     result = np.append(result, symlets)
 
     return result
@@ -276,6 +280,8 @@ def evaluate_noise_reduction_algorithm(
     input_mse = mse(normalize(input_data), normalize(noisy_data))
     input_snr = snr(input_data, noise)
 
+    execution_start = perf_counter_ns()
+
     transform = pywt.wavedec(noisy_data, mother_wavelet, level=local_max_level)
 
     wavelet_coefficients = transform[1:]
@@ -289,6 +295,8 @@ def evaluate_noise_reduction_algorithm(
 
     output_data = pywt.waverec(transform, mother_wavelet)
     output_data = output_data[:input_data.size].astype(np.int16)
+
+    execution_end = perf_counter_ns()
 
     remaining_noise = output_data - input_data
 
@@ -304,7 +312,8 @@ def evaluate_noise_reduction_algorithm(
         'input_snr': input_snr, 
         'output_snr': output_snr, 
         'input_mse': input_mse, 
-        'output_mse': output_mse
+        'output_mse': output_mse,
+        'execution_time': (execution_end - execution_start)/1000000 # in milliseconds
     }
 
     return values
@@ -355,7 +364,7 @@ def main():
     current_run = 1
     total_runs = (
         len(mother_wavelets)
-        *(global_max_level - 1)
+        *(global_max_level)
         *len(threshold_types)
         *len(k_coeffs)
         *len(m_coeffs)

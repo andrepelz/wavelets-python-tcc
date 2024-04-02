@@ -1,7 +1,6 @@
-*.pcm
-*.wav
 __pycache__
 MUSAN
 musan
-outputs
 my-files
+research/*.pcm
+research/*.wav
