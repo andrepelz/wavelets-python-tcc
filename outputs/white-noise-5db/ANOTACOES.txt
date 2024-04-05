@@ -1,0 +1,3 @@
+resultados melhores com:
+ - maior atenuação de k e m (valores menores, produto proximo a ~0.5)
+ - filtros com mais coeficientes (db8, sym8)

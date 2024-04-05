@@ -1,0 +1,4 @@
+amplitude do ruído dividida por 3 para aumentar SNR de entrada
+resultados melhores com:
+ - menor atenuação de k e m (valores próximos a 1)
+ - filtros com menos coeficientes (db2, sym2)

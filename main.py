@@ -11,14 +11,15 @@ from scipy.io import wavfile
 GLOBAL_MAX_LEVEL = 5
 SIGNAL_SAMPLE_RATE = 16000
 
-SIGNAL_NAME = 'speech-librivox-0005'
+SIGNAL_NAME = 'speech-librivox-0117'
 # SIGNAL_FOLDER = 'musan/speech/librivox'
-NOISE_NAME = 'white_noise_5db'
+NOISE_NAME = 'noise-free-sound-0271'
 # NOISE_FOLDER = 'musan/noise/free-sound'
-INPUT_SUBFOLDER = 'portugues'
-NOISE_SUBFOLDER = 'ruido'
+INPUT_SUBFOLDER = 'masculina'
+NOISE_SUBFOLDER = 'ruido/babble'
 INPUT_FOLDER = f'inputs'
-OUTPUT_FOLDER = f'outputs/{SIGNAL_NAME}&{NOISE_NAME}'
+OUTPUT_FOLDER = f'outputs/{NOISE_NAME}/{SIGNAL_NAME}&{NOISE_NAME}'
+# OUTPUT_FOLDER = f'outputs/modwt/{SIGNAL_NAME}&{NOISE_NAME}'
 
 FILE_EXTENSION = 'wav'
 
@@ -45,7 +46,7 @@ def init_mother_wavelets() -> list[str]:
     daubechies = [ 'db2', 'db5', 'db8' ]
     result = np.append(result, daubechies)
 
-    symlets = [ 'sym2', 'sym4' ]
+    symlets = [ 'sym2', 'sym5', 'sym8' ]
     result = np.append(result, symlets)
 
     return result
@@ -343,8 +344,9 @@ def main():
     print()
 
     data = get_input_data_from_file()[:signal_sample_rate*30]
-    # noise = get_noise_from_file()
-    noise = generate_white_noise(data, 5)[:signal_sample_rate*30]
+    noise = get_noise_from_file()
+    noise = noise//3
+    # noise = generate_white_noise(data, 10)[:signal_sample_rate*30]
 
     global noise_sample_rate
 
