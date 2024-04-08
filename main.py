@@ -12,15 +12,15 @@ from numpy.typing import ArrayLike
 
 # SIGNAL_SAMPLE_RATE = 16000
 
-SIGNAL_NAME = 'speech-librivox-0117'
-NOISE_NAME = 'noise-free-sound-0165'
-INPUT_FOLDER = f'inputs/masculina'
+INPUT_NAME = 'speech-librivox-0034'
+NOISE_NAME = 'noise-free-sound-0278'
+INPUT_FOLDER = f'inputs/feminina'
 NOISE_FOLDER = f'inputs/ruido/real'
-OUTPUT_FOLDER = f'outputs/{NOISE_NAME}/{SIGNAL_NAME}&{NOISE_NAME}'
+OUTPUT_FOLDER = f'outputs/{NOISE_NAME}/{INPUT_NAME}&{NOISE_NAME}'
 
 FILE_EXTENSION = 'wav'
 
-INPUT_DATA_FILENAME = f'{SIGNAL_NAME}.{FILE_EXTENSION}'
+INPUT_DATA_FILENAME = f'{INPUT_NAME}.{FILE_EXTENSION}'
 NOISE_FILENAME = f'{NOISE_NAME}.{FILE_EXTENSION}'
 
 
@@ -91,7 +91,7 @@ def main():
 
     signal_sample_rate, data = get_input_data_from_file(INPUT_DATA_FILENAME, INPUT_FOLDER, FILE_EXTENSION)
     noise_sample_rate, noise = get_noise_from_file(NOISE_FILENAME, NOISE_FOLDER, FILE_EXTENSION)
-    noise = noise//3
+    noise = noise//2
 
     data = data[:signal_sample_rate*30]
 
