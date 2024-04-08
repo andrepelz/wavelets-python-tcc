@@ -155,9 +155,9 @@ def save_results(
         sample_rate
     )
 
-    results.to_csv(f'{output_folder}/results_raw', sep=';', decimal=',')
-    results_by_snr.to_csv(f'{output_folder}/results_snr', sep=';', decimal=',')
-    results_by_mse.to_csv(f'{output_folder}/results_mse', sep=';', decimal=',')
+    results.to_csv(f'{output_folder}/results_raw.csv', sep=';', decimal=',')
+    results_by_snr.to_csv(f'{output_folder}/results_snr.csv', sep=';', decimal=',')
+    results_by_mse.to_csv(f'{output_folder}/results_mse.csv', sep=';', decimal=',')
 
     print(f'Results saved to folder: {output_folder}')
     print(f'Best configuration: \n'
