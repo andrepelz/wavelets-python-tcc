@@ -69,7 +69,7 @@ def save_outputs_to_file(
     _save_signal_to_file(noise, f'{output_folder}/noise_{noise_filename}', file_extension, sample_rate)
     _save_signal_to_file(noisy_data, f'{output_folder}/noisy_{input_filename}', file_extension, sample_rate)
     _save_signal_to_file(output_data, f'{output_folder}/denoised_{input_filename}', file_extension, sample_rate)
-    _save_signal_to_file(remaining_noise, f'{output_folder}/remaining_noise', file_extension, sample_rate)
+    _save_signal_to_file(remaining_noise, f'{output_folder}/remaining_noise.{file_extension}', file_extension, sample_rate)
 
 
 def _sort_dataset_by_snr(dataset: pd.DataFrame) -> pd.DataFrame:
