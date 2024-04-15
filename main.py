@@ -33,11 +33,6 @@ def evaluate_noise_reduction_algorithm(
     k_coeff: float,
     m_coeff: float
 ) -> dict:
-    local_max_level = min(max_level, pywt.dwt_max_level(input_data.size, mother_wavelet))
-
-    if local_max_level < max_level: # if local max level is reduced, then further calculations will be duplicated redundant
-        return (None, None)
-    
     noisy_data = input_data + noise
 
     input_mse = mse(normalize(input_data), normalize(noisy_data))
@@ -45,7 +40,7 @@ def evaluate_noise_reduction_algorithm(
 
     execution_start = perf_counter_ns()
 
-    transform = pywt.wavedec(noisy_data, mother_wavelet, level=local_max_level)
+    transform = pywt.wavedec(noisy_data, mother_wavelet, level=max_level)
 
     wavelet_coefficients = transform[1:]
     coefficients_d1 = wavelet_coefficients[-1] # coefficients D1 from first level wavelet decomposition
@@ -68,7 +63,7 @@ def evaluate_noise_reduction_algorithm(
 
     values = { 
         'mother_wavelet': mother_wavelet,
-        'local_max_level': local_max_level,
+        'local_max_level': max_level,
         'threshold_type': threshold_type,
         'k_coeff': k_coeff,
         'm_coeff': m_coeff,
