@@ -13,7 +13,7 @@ from numpy.typing import ArrayLike
 # SIGNAL_SAMPLE_RATE = 16000
 
 INPUT_NAME = 'speech-librivox-0034'
-NOISE_NAME = 'noise-free-sound-0278'
+NOISE_NAME = 'noise-free-sound-0165'
 INPUT_FOLDER = f'inputs/feminina'
 NOISE_FOLDER = f'inputs/ruido/real'
 OUTPUT_FOLDER = f'outputs/{NOISE_NAME}/{INPUT_NAME}&{NOISE_NAME}'
@@ -22,6 +22,8 @@ FILE_EXTENSION = 'wav'
 
 INPUT_DATA_FILENAME = f'{INPUT_NAME}.{FILE_EXTENSION}'
 NOISE_FILENAME = f'{NOISE_NAME}.{FILE_EXTENSION}'
+
+TARGET_INPUT_SNR = 10
 
 
 def evaluate_noise_reduction_algorithm(
@@ -94,7 +96,7 @@ def main():
     else:
         noise = noise[:data.size]
 
-    noise = update_noise_to_target_snr(noise, data, 5)
+    noise = update_noise_to_target_snr(noise, data, TARGET_INPUT_SNR)
 
     if len(data.shape) > 1: # adjust noise for stereo audio
         data = np.transpose(data)
