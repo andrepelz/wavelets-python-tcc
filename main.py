@@ -5,7 +5,7 @@ from time import perf_counter_ns
 from research.modwt import modwt_waverec, modwt_wavedec
 
 from variables import *
-from utils import generate_white_noise, mse, snr, normalize, calculate_threshold
+from utils import update_noise_to_target_snr, mse, snr, normalize, calculate_threshold
 from io_handling import get_input_data_from_file, get_noise_from_file, save_results
 
 from numpy.typing import ArrayLike
@@ -85,19 +85,16 @@ def main():
     m_coeffs = init_m_coeffs()
 
     signal_sample_rate, data = get_input_data_from_file(INPUT_DATA_FILENAME, INPUT_FOLDER, FILE_EXTENSION)
-    noise_sample_rate, noise = get_noise_from_file(NOISE_FILENAME, NOISE_FOLDER, FILE_EXTENSION)
-    noise = noise//2
+    _, noise = get_noise_from_file(NOISE_FILENAME, NOISE_FOLDER, FILE_EXTENSION)
 
     data = data[:signal_sample_rate*30]
-
-    # noise = generate_white_noise(data, 10)[:signal_sample_rate*30]
-    # global noise_sample_rate
-    # noise_sample_rate = signal_sample_rate
 
     if data.size > noise.size:
         data = data[:noise.size]
     else:
         noise = noise[:data.size]
+
+    noise = update_noise_to_target_snr(noise, data, 5)
 
     if len(data.shape) > 1: # adjust noise for stereo audio
         data = np.transpose(data)
