@@ -1,0 +1,1 @@
+mudar funções wavelet de double* para int16_t* (normalizar coeficientes wavelet para int16 fazendo h*(2^15 - 1))
