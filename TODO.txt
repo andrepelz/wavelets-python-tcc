@@ -1,1 +1,2 @@
-mudar funções wavelet de double* para int16_t* (normalizar coeficientes wavelet para int16 fazendo h*(2^15 - 1))
+refazer testes de:
+ - speech-librivox-0005 & white_noise_5db
