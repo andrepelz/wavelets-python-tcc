@@ -12,10 +12,10 @@ from numpy.typing import ArrayLike
 
 # SIGNAL_SAMPLE_RATE = 16000
 
-INPUT_NAME = 'speech-librivox-0034'
-NOISE_NAME = 'noise-free-sound-0165'
-INPUT_FOLDER = f'inputs/feminina'
-NOISE_FOLDER = f'inputs/ruido/real'
+INPUT_NAME = 'speech-librivox-0005'
+NOISE_NAME = 'white_noise'
+INPUT_FOLDER = f'inputs/portugues'
+NOISE_FOLDER = f'inputs/ruido/branco'
 OUTPUT_FOLDER = f'outputs/{NOISE_NAME}/{INPUT_NAME}&{NOISE_NAME}'
 
 FILE_EXTENSION = 'wav'
@@ -23,7 +23,7 @@ FILE_EXTENSION = 'wav'
 INPUT_DATA_FILENAME = f'{INPUT_NAME}.{FILE_EXTENSION}'
 NOISE_FILENAME = f'{NOISE_NAME}.{FILE_EXTENSION}'
 
-TARGET_INPUT_SNR = 10
+TARGET_INPUT_SNR = 5
 
 
 def evaluate_noise_reduction_algorithm(
