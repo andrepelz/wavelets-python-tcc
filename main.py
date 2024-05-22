@@ -10,6 +10,8 @@ from io_handling import get_input_data_from_file, get_noise_from_file, save_resu
 
 from numpy.typing import ArrayLike
 
+import sys
+
 # SIGNAL_SAMPLE_RATE = 16000
 
 INPUT_NAME = 'speech-librivox-0005'
@@ -80,14 +82,25 @@ def evaluate_noise_reduction_algorithm(
 
 
 def main():
-    mother_wavelets = init_mother_wavelets()
-    transform_max_level = init_transform_level()
-    threshold_types = init_threshold_types()
-    k_coeffs = init_k_coeffs()
-    m_coeffs = init_m_coeffs()
+    mother_wavelet = 'sym8'
+    level = 5
+    threshold_type = 'soft'
+    k_coeff = 1
+    m_coeff = 1
 
-    signal_sample_rate, data = get_input_data_from_file(INPUT_DATA_FILENAME, INPUT_FOLDER, FILE_EXTENSION)
-    _, noise = get_noise_from_file(NOISE_FILENAME, NOISE_FOLDER, FILE_EXTENSION)
+    if len(sys.argv) != 3:
+        return -1
+
+    input_name = sys.argv[1]
+    noise_name = sys.argv[2]
+    input_folder = f'test/{input_name}'
+    noise_folder = f'test/{input_name}'
+    file_extension = 'wav'
+    input_filename = f'{input_name}.{file_extension}'
+    noise_filename = f'noise_{noise_name}.{file_extension}'
+
+    signal_sample_rate, data = get_input_data_from_file(input_filename, input_folder, file_extension)
+    _, noise = get_noise_from_file(noise_filename, noise_folder, file_extension)
 
     data = data[:signal_sample_rate*30]
 
@@ -96,46 +109,40 @@ def main():
     else:
         noise = noise[:data.size]
 
-    noise = update_noise_to_target_snr(noise, data, TARGET_INPUT_SNR)
+    # noise = update_noise_to_target_snr(noise, data, TARGET_INPUT_SNR)
 
-    if len(data.shape) > 1: # adjust noise for stereo audio
-        data = np.transpose(data)
-        noise = np.array([noise, noise])
+    # if len(data.shape) > 1: # adjust noise for stereo audio
+    #     data = np.transpose(data)
+    #     noise = np.array([noise, noise])
         
     results = []
 
-    current_run = 1
-    total_runs = (
-        len(mother_wavelets)
-        *(transform_max_level)
-        *len(threshold_types)
-        *len(k_coeffs)
-        *len(m_coeffs)
+    results.append(
+        evaluate_noise_reduction_algorithm(
+            data, 
+            noise, 
+            mother_wavelet, 
+            level, 
+            threshold_type, 
+            k_coeff, 
+            m_coeff
+        )
     )
 
-    for wavelet in mother_wavelets:
-        for level in range(1, transform_max_level + 1):
-            for thresh_type in threshold_types:
-                for k_coeff in k_coeffs:
-                    for m_coeff in m_coeffs:
-                        print(f'Running transform {current_run}/{total_runs}')
-                        current_run += 1
-                        results.append(
-                            evaluate_noise_reduction_algorithm(
-                                data, 
-                                noise, 
-                                wavelet, 
-                                level, 
-                                thresh_type, 
-                                k_coeff, 
-                                m_coeff
-                            )
-                        )
-
-    print()
+    results = [
+        {
+            'input': input_name,
+            'noise': noise_name,
+            'input_snr': results[0]['input_snr'],
+            'output_snr': results[0]['output_snr'],
+            'input_mse': results[0]['input_mse'],
+            'output_mse': results[0]['output_mse'],
+            'execution_time': results[0]['execution_time']
+        }
+    ]
 
     results = pd.DataFrame(results)
-    save_results(results, data, noise, INPUT_DATA_FILENAME, NOISE_FILENAME, OUTPUT_FOLDER, FILE_EXTENSION, signal_sample_rate)
+    results.to_csv('test/results.csv', mode='ab', header=False, sep=';')
 
 
 if __name__ == '__main__':
