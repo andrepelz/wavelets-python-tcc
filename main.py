@@ -82,13 +82,13 @@ def evaluate_noise_reduction_algorithm(
 
 
 def main():
-    mother_wavelet = 'sym8'
-    level = 5
-    threshold_type = 'soft'
-    k_coeff = 1
-    m_coeff = 1
+    mother_wavelet = sys.argv[3]
+    level = int(sys.argv[4])
+    threshold_type = sys.argv[5]
+    k_coeff = float(sys.argv[6])
+    m_coeff = float(sys.argv[7])
 
-    if len(sys.argv) != 3:
+    if len(sys.argv) != 8:
         return -1
 
     input_name = sys.argv[1]
