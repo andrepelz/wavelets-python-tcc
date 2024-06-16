@@ -2,11 +2,10 @@ import numpy as np
 import pandas as pd
 import pywt
 from time import perf_counter_ns
-from research.modwt import modwt_waverec, modwt_wavedec
 
 from variables import *
 from utils import update_noise_to_target_snr, mse, snr, normalize, calculate_threshold
-from io_handling import get_input_data_from_file, get_noise_from_file, save_results
+from io_handling import get_input_data_from_file, get_noise_from_file, save_results, _save_artifacts_from_configuration
 
 from numpy.typing import ArrayLike
 
@@ -87,62 +86,44 @@ def main():
     threshold_type = sys.argv[5]
     k_coeff = float(sys.argv[6])
     m_coeff = float(sys.argv[7])
+    target_snr = float(sys.argv[8])
 
-    if len(sys.argv) != 8:
+    if len(sys.argv) != 9:
         return -1
 
     input_name = sys.argv[1]
     noise_name = sys.argv[2]
     input_folder = f'test/{input_name}'
     noise_folder = f'test/{input_name}'
+    output_folder = f'test/{input_name}'
     file_extension = 'wav'
     input_filename = f'{input_name}.{file_extension}'
-    noise_filename = f'noise_{noise_name}.{file_extension}'
+    noise_filename = f'{noise_name}.{file_extension}'
 
     signal_sample_rate, data = get_input_data_from_file(input_filename, input_folder, file_extension)
     _, noise = get_noise_from_file(noise_filename, noise_folder, file_extension)
-
-    data = data[:signal_sample_rate*30]
 
     if data.size > noise.size:
         data = data[:noise.size]
     else:
         noise = noise[:data.size]
 
-    # noise = update_noise_to_target_snr(noise, data, TARGET_INPUT_SNR)
+    noise = update_noise_to_target_snr(noise, data, target_snr)
 
-    # if len(data.shape) > 1: # adjust noise for stereo audio
-    #     data = np.transpose(data)
-    #     noise = np.array([noise, noise])
-        
-    results = []
-
-    results.append(
-        evaluate_noise_reduction_algorithm(
-            data, 
-            noise, 
-            mother_wavelet, 
-            level, 
-            threshold_type, 
-            k_coeff, 
-            m_coeff
-        )
+    _save_artifacts_from_configuration(
+        data, 
+        noise, 
+        mother_wavelet, 
+        level, 
+        threshold_type, 
+        k_coeff, 
+        m_coeff,
+        input_filename,
+        noise_filename,
+        output_folder,
+        file_extension,
+        signal_sample_rate
     )
-
-    results = [
-        {
-            'input': input_name,
-            'noise': noise_name,
-            'input_snr': results[0]['input_snr'],
-            'output_snr': results[0]['output_snr'],
-            'input_mse': results[0]['input_mse'],
-            'output_mse': results[0]['output_mse'],
-            'execution_time': results[0]['execution_time']
-        }
-    ]
-
-    results = pd.DataFrame(results)
-    results.to_csv('test/results.csv', mode='ab', header=False, sep=';')
 
 
 if __name__ == '__main__':

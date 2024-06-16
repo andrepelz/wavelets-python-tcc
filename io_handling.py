@@ -5,7 +5,7 @@ from numpy.typing import ArrayLike
 from scipy.io import wavfile
 from utils import calculate_threshold
 
-def _get_signal_from_file(filename: str, file_extension: str) -> tuple[int, ArrayLike]:
+def _get_signal_from_file(filename: str, file_extension: str) -> tuple:
     signal_sample_rate = None
 
     if file_extension == 'pcm':
@@ -31,11 +31,11 @@ def _save_signal_to_file(data: ArrayLike, filename: str, file_extension: str, sa
         raise ValueError('Unknown/Unsupported file extension.')
 
 
-def get_input_data_from_file(filename: str, input_folder: str, file_extension: str) -> tuple[int, ArrayLike]:
+def get_input_data_from_file(filename: str, input_folder: str, file_extension: str) -> tuple:
     return _get_signal_from_file(f'{input_folder}/{filename}', file_extension)
 
 
-def get_noise_from_file(filename: str, input_folder: str, file_extension: str) -> tuple[int, ArrayLike]:
+def get_noise_from_file(filename: str, input_folder: str, file_extension: str) -> tuple:
     return _get_signal_from_file(f'{input_folder}/{filename}', file_extension)
 
 
