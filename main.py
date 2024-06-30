@@ -30,11 +30,35 @@ def evaluate_noise_reduction_algorithm(
     input_data: ArrayLike, 
     noise: ArrayLike,
     mother_wavelet: str, 
-    max_level: int, 
+    transform_level: int, 
     threshold_type: str,
     k_coeff: float,
     m_coeff: float
 ) -> dict:
+    """
+    Função de avaliação do algoritmo de redução de ruídos usando Transformada Wavelet.
+
+    Parâmetros
+    ----------
+    `input_data` : `ArrayLike`
+        vetor com sinal de voz limpa de entrada
+    `noise` : `ArrayLike`
+        vetor com sinal de ruído
+    `mother_wavelet` : `str`
+        nome da Wavelet Mãe
+    `transform_level` : `int`
+        nível da transformada
+    `threshold_type` : `str`
+        nome do tipo de threshold
+    `k_coeff` : `float`
+        coeficiente k
+    `m_coeff` : `float`
+        coeficiente m
+        
+    Retorna
+    -------
+    `dict`
+    """
     noisy_data = input_data + noise
 
     input_mse = mse(normalize(input_data), normalize(noisy_data))
@@ -42,7 +66,7 @@ def evaluate_noise_reduction_algorithm(
 
     execution_start = perf_counter_ns()
 
-    transform = pywt.wavedec(noisy_data, mother_wavelet, level=max_level)
+    transform = pywt.wavedec(noisy_data, mother_wavelet, level=transform_level)
 
     wavelet_coefficients = transform[1:]
     coefficients_d1 = wavelet_coefficients[-1] # coefficients D1 from first level wavelet decomposition
@@ -65,7 +89,7 @@ def evaluate_noise_reduction_algorithm(
 
     values = { 
         'mother_wavelet': mother_wavelet,
-        'local_max_level': max_level,
+        'local_max_level': transform_level,
         'threshold_type': threshold_type,
         'k_coeff': k_coeff,
         'm_coeff': m_coeff,
@@ -80,6 +104,7 @@ def evaluate_noise_reduction_algorithm(
 
 
 def main():
+    """Função principal do programa."""
     mother_wavelets = init_mother_wavelets()
     transform_max_level = init_transform_level()
     threshold_types = init_threshold_types()

@@ -6,6 +6,20 @@ from scipy.io import wavfile
 from utils import calculate_threshold
 
 def _get_signal_from_file(filename: str, file_extension: str) -> tuple[int, ArrayLike]:
+    """
+    Função que lê um sinal de um arquivo de áudio.
+
+    Parâmetros
+    ----------
+    `filename` : `str`
+        nome do arquivo de áudio a ser lido
+    `file_extension` : `str`
+        extensão do arquivo de áudio
+        
+    Retorna
+    -------
+    `tuple[int, ArrayLike]`
+    """
     signal_sample_rate = None
 
     if file_extension == 'pcm':
@@ -20,6 +34,20 @@ def _get_signal_from_file(filename: str, file_extension: str) -> tuple[int, Arra
 
 
 def _save_signal_to_file(data: ArrayLike, filename: str, file_extension: str, sample_rate: int = None):
+    """
+    Função que salva um sinal em um arquivo de áudio.
+
+    Parâmetros
+    ----------
+    `data`: `ArrayLike`
+        vetor com sinal a ser salvo
+    `filename` : `str`
+        nome do arquivo de áudio a ser salvo
+    `file_extension` : `str`
+        extensão do arquivo de áudio
+    `sample_rate` : `int`
+        taxa de amostragem do arquivo de áudio
+    """
     if file_extension == 'pcm':
         with open(filename, 'wb') as output_file:
             output_file.write(data)
@@ -50,6 +78,32 @@ def save_outputs_to_file(
         output_folder: str, 
         file_extension: str,
         sample_rate: int = None) -> None:
+    """
+    Salva sinais de um teste em arquivos de áudio.
+
+    Parâmetros
+    ----------
+    `input_data` : `ArrayLike`
+        vetor com sinal de voz limpa de entrada
+    `noise` : `ArrayLike`
+        vetor com sinal de ruído
+    `noisy_data` : `ArrayLike`
+        vetor com sinal ruidoso
+    `output_data` : `ArrayLike` 
+        vetor do sinal de saída com ruído reduzido
+    `remaining_noise` : `ArrayLike`
+        vetor com ruído remanescente na saída
+    `input_filename` : `str`
+        nome do arquivo de áudio da voz limpa de entrada
+    `noise_filename` : `str`
+        nome do arquivo de áudio do ruído
+    `output_folder` : `str`
+        nome da pasta onde salvar os arquivos de saída
+    `file_extension` : `str`
+        extensão dos arquivos de áudio
+    `sample_rate` : `int`
+        taxa de amostragem dos arquivos de áudio
+    """
     from pathlib import Path
     import os
     
@@ -73,10 +127,34 @@ def save_outputs_to_file(
 
 
 def _sort_dataset_by_snr(dataset: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ordena dataset por SNR de saída decrescente.
+
+    Parâmetros
+    ----------
+    `dataset` : `DataFrame`
+        dataset com resultados dos testes
+        
+    Retorna
+    -------
+    `DataFrame`
+    """
     return dataset.sort_values('output_snr', ascending=False)
 
 
 def _sort_dataset_by_mse(dataset: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ordena dataset por MSE de saída decrescente.
+
+    Parâmetros
+    ----------
+    `dataset` : `DataFrame`
+        dataset com resultados dos testes
+        
+    Retorna
+    -------
+    `DataFrame`
+    """
     return dataset.sort_values('output_mse', ascending=True)
 
 
@@ -93,7 +171,37 @@ def _save_artifacts_from_configuration(
     output_folder: str, 
     file_extension: str,
     sample_rate: int = None
-) -> dict:
+) -> None:
+    """
+    Repete teste com melhor resultado e salva saída com ruído reduzido em um arquivo de áudio.
+
+    Parâmetros
+    ----------
+    `input_data` : `ArrayLike`
+        vetor com sinal de voz limpa de entrada
+    `noise` : `ArrayLike`
+        vetor com sinal de ruído
+    `mother_wavelet` : `str`
+        nome da Wavelet Mãe
+    `transform_level` : `int`
+        nível da transformada
+    `threshold_type` : `str`
+        nome do tipo de threshold
+    `k_coeff` : `float`
+        coeficiente k
+    `m_coeff` : `float`
+        coeficiente m
+    `input_filename` : `str`
+        nome do arquivo de áudio da voz limpa de entrada
+    `noise_filename` : `str`
+        nome do arquivo de áudio do ruído
+    `output_folder` : `str`
+        nome da pasta onde salvar os arquivos de saída
+    `file_extension` : `str`
+        extensão dos arquivos de áudio
+    `sample_rate` : `int`
+        taxa de amostragem dos arquivos de áudio
+    """
     noisy_data = input_data + noise
 
     transform = pywt.wavedec(noisy_data, mother_wavelet, level=max_level)
@@ -126,6 +234,28 @@ def save_results(
     file_extension: str,
     sample_rate: int = None
 ) -> None:
+    """
+    Função para salvar resultados do algoritmo em arquivos de saída.
+
+    Parâmetros
+    ----------
+    `results` : `Dataframe`
+        `Dataframe` da biblioteca pandas contendo os resultados de todos os testes
+    `input_data` : `ArrayLike`
+        vetor com sinal de voz limpa de entrada
+    `noise` : `ArrayLike`
+        vetor com sinal de ruído
+    `input_filename` : `str`
+        nome do arquivo de áudio da voz limpa de entrada
+    `noise_filename` : `str`
+        nome do arquivo de áudio do ruído
+    `output_folder` : `str`
+        nome da pasta onde salvar os arquivos de saída
+    `file_extension` : `str`
+        extensão dos arquivos de áudio
+    `sample_rate` : `int`
+        taxa de amostragem dos arquivos de áudio
+    """
     from pathlib import Path
     import os
 
