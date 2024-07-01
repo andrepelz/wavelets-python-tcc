@@ -7,7 +7,7 @@ def update_noise_to_target_snr(
         signal: ArrayLike, 
         target_snr_db: float) -> ArrayLike:
     """
-    Ajusta ganho de um sinal de ruído para uma dada SNR alvo
+    Ajusta ganho de um sinal de ruído para uma dada SNR alvo.
 
     Parâmetros
     ----------
@@ -41,7 +41,7 @@ def update_noise_to_target_snr(
 
 def normalize(data: ArrayLike) -> ArrayLike:
     """
-    Normaliza um vetor com inteiros 16 bit entre os valores -1 e 1
+    Normaliza um vetor com inteiros 16 bit entre os valores -1 e 1.
 
     Parâmetros
     ----------
@@ -57,7 +57,7 @@ def normalize(data: ArrayLike) -> ArrayLike:
 
 def unnormalize(data: ArrayLike) -> ArrayLike:
     """
-    Converte um vetor normalizado entre -1 e 1 em um vetor de inteiros 16 bit
+    Converte um vetor normalizado entre -1 e 1 em um vetor de inteiros 16 bit.
 
     Parâmetros
     ----------
